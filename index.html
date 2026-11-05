@@ -176,7 +176,7 @@
       '<main id="feed"><div class="hint">Loading the last few days…</div></main>'+
       '<footer><div class="modes" id="modes">'+
         '<button data-m="" class="sel">Auto</button><button data-m="ask: ">Ask</button><button data-m="draft: ">Check a draft</button><button data-m="teach: ">Teach</button><button data-quick="ask: What is my best next move with them right now? Reply, wait, or nothing, and if reply, what." style="margin-left:auto;border-color:var(--teal);color:var(--teal)">Best next move?</button>'+
-      '</div><div class="chipwrap" id="chip"></div><div class="compose"><button class="attach" id="attach" aria-label="Attach an image">&#128206;</button><input type="file" id="file" accept="image/*" hidden><textarea id="box" rows="1" placeholder="Ask, paste a draft, or tell Pause something"></textarea><button class="send" id="send" disabled aria-label="Send">&#8593;</button></div></footer>'+
+      '</div><div class="chipwrap" id="chip"></div><div class="compose"><button class="attach" id="attach" aria-label="Attach an image">&#128206;</button><input type="file" id="file" accept="image/*" multiple hidden><textarea id="box" rows="1" placeholder="Ask, paste a draft, or tell Pause something"></textarea><button class="send" id="send" disabled aria-label="Send">&#8593;</button></div></footer>'+
       '<div class="sheet" id="sheet"><div class="inner"><strong>Pause with '+esc(cfg.name)+'</strong>'+
         '<div>Cards arrive on <code>'+esc(cfg.outTopic)+'</code></div><div>Pause listens on <code>'+esc(cfg.inTopic)+'</code></div>'+
         '<div style="color:var(--muted);font-size:13px">Keep the codes private: anyone who knew them could read your cards.</div>'+
@@ -189,10 +189,12 @@
     send.onclick = function(){ submit(box.value); box.value = ''; box.style.height = 'auto'; send.disabled = true; };
     document.getElementById('attach').onclick = function(){ document.getElementById('file').click(); };
     document.getElementById('file').onchange = function(e){
-      var f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
-      if (!/^image\//.test(f.type || '')) { alert('Images only.'); return; }
-      if (f.size > 14 * 1024 * 1024) { alert('That image is over 14 MB. Try a screenshot or a smaller photo.'); return; }
-      pendingFile = f; showChip(f); send.disabled = false;
+      var fs = [].slice.call(e.target.files || []); e.target.value = ''; if (!fs.length) return;
+      fs = fs.filter(function(f){ return /^image\//.test(f.type || ''); });
+      if (!fs.length) { alert('Images only.'); return; }
+      if (fs.some(function(f){ return f.size > 14 * 1024 * 1024; })) { alert('One of those is over 14 MB. Try screenshots or smaller photos.'); return; }
+      if (fs.length > 20) { alert('Up to 20 images at a time.'); return; }
+      pendingFile = fs.length === 1 ? fs[0] : fs; showChip(fs.length === 1 ? fs[0] : fs); send.disabled = false;
     };
     document.getElementById('modes').onclick = function(e){ var b = e.target.closest('button'); if (!b) return; if (b.hasAttribute('data-quick')) { thinkingUntil = Date.now() + 90000; post(b.getAttribute('data-quick')).then(function(m){ m.topic = cfg.inTopic; add(m, true); render(); setTimeout(render, 91000); }).catch(function(err){ thinkingUntil = 0; render(); alert('Could not send: ' + err.message); }); return; } [].forEach.call(this.children, function(x){ if (!x.hasAttribute('data-quick')) x.classList.remove('sel'); }); b.classList.add('sel'); };
     document.getElementById('gear').onclick = function(){ document.getElementById('sheet').classList.add('open'); };
@@ -418,8 +420,9 @@
   function showChip(f){
     var c = document.getElementById('chip'); if (!c) return;
     if (!f) { c.innerHTML = ''; return; }
-    var url = URL.createObjectURL(f);
-    c.innerHTML = '<div class="chip"><img src="' + url + '" alt=""><span>' + esc(f.name || 'image') + '</span><button id="chipx" aria-label="Remove image">&#10005;</button></div>';
+    var first = Array.isArray(f) ? f[0] : f, label = Array.isArray(f) ? (f.length + ' images (sent one by one)') : (f.name || 'image');
+    var url = URL.createObjectURL(first);
+    c.innerHTML = '<div class="chip"><img src="' + url + '" alt=""><span>' + esc(label) + '</span><button id="chipx" aria-label="Remove image">&#10005;</button></div>';
     document.getElementById('chipx').onclick = function(){ pendingFile = null; showChip(null); var b = document.getElementById('box'); document.getElementById('send').disabled = !b.value.trim(); };
   }
   function rfc2047(s){ return /^[\x20-\x7e]*$/.test(s) ? s : '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
@@ -434,7 +437,12 @@
     var msg = text ? mode() + text : '';
     var f = pendingFile; pendingFile = null; showChip(null);
     thinkingUntil = Date.now() + 90000;
-    (f ? postFile(f, msg) : post(msg)).then(function(m){ m.topic = cfg.inTopic; add(m, true); render(); setTimeout(render, 91000); })
+    var job;
+    if (Array.isArray(f)) {
+      // several images: send one at a time, each with the same text, a few seconds apart for the relay
+      job = f.reduce(function(p, file, i){ return p.then(function(){ return new Promise(function(res){ setTimeout(res, i ? 4000 : 0); }).then(function(){ return postFile(file, msg); }).then(function(m){ m.topic = cfg.inTopic; add(m, true); render(); }); }); }, Promise.resolve()).then(function(){ return { id: 'batch' }; });
+    } else job = (f ? postFile(f, msg) : post(msg));
+    job.then(function(m){ if (m && m.id && m.id !== 'batch') { m.topic = cfg.inTopic; add(m, true); } render(); setTimeout(render, 91000); })
       .catch(function(err){ thinkingUntil = 0; render(); alert('Could not send: ' + err.message); });
   }
   function rate(cid, v){
