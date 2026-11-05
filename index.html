@@ -219,10 +219,10 @@
   function topicsPath(){ return cfg.server + '/' + encodeURIComponent(cfg.outTopic) + ',' + encodeURIComponent(cfg.inTopic); }
   // The relay only keeps about twelve hours, so each person's timeline is also kept on this device.
   function cacheKey(){ return 'pause.msgs.' + cfg.inTopic; }
-  function slim(m){ var o = { id: m.id, time: m.time, topic: m.topic, title: m.title, message: m.message }; if (m.actions) o.actions = m.actions.map(function(a){ return { action: a.action, label: a.label, url: a.url, body: a.body }; }); if (m.attachment) o.attachment = { url: m.attachment.url, name: m.attachment.name, type: m.attachment.type, expires: m.attachment.expires }; return o; }
+  function slim(m){ var o = { id: m.id, time: m.time, topic: m.topic, title: m.title, message: m.message, tags: m.tags }; if (m.actions) o.actions = m.actions.map(function(a){ return { action: a.action, label: a.label, url: a.url, body: a.body }; }); if (m.attachment) o.attachment = { url: m.attachment.url, name: m.attachment.name, type: m.attachment.type, expires: m.attachment.expires }; return o; }
   var saveTimer = null;
   function saveCache(){ clearTimeout(saveTimer); saveTimer = setTimeout(function(){ try { var keep = messages.slice().sort(function(a,b){ return a.time - b.time; }).slice(-400).map(slim); localStorage.setItem(cacheKey(), JSON.stringify(keep)); } catch (e) {} }, 800); }
-  function loadCache(){ var list = loadJSON(cacheKey(), []); list.forEach(function(m){ if (m && m.id && !seen[m.id]) { seen[m.id] = 1; messages.push(m); } }); }
+  function loadCache(){ var list = loadJSON(cacheKey(), []); list.forEach(function(m){ if (!m || !m.id || seen[m.id]) return; if (isHeartbeat(m)) { seen[m.id] = 1; if (m.time > lastHb) lastHb = m.time; return; } seen[m.id] = 1; messages.push(m); }); }
   function loadHistory(){
     loadCache();
     fetch(topicsPath() + '/json?poll=1&since=72h').then(function(r){ return r.text(); }).then(function(t){
@@ -251,7 +251,7 @@
   }
   setInterval(renderStatus, 60000);
   var lastHb = 0;  // the server's latest heartbeat, so the app can say when the Mac is asleep
-  function isHeartbeat(m){ return (m.tags || []).indexOf('heartbeat') >= 0; }
+  function isHeartbeat(m){ return (m.tags || []).indexOf('heartbeat') >= 0 || (m.title === 'Pause heartbeat') || ((m.message || '').trim() === 'hb' && !m.attachment); }
   function add(m, live){
     if (seen[m.id]) return false;
     if (isHeartbeat(m)) { seen[m.id] = 1; if (m.time > lastHb) { lastHb = m.time; try { localStorage.setItem('pause.hb.' + cfg.inTopic, String(lastHb)); } catch (e) {} } lastId = m.id; renderStatus(); return false; }
