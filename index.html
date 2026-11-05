@@ -65,6 +65,14 @@
   .modes button{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:4px 10px;font-size:12px}
   .modes button.sel{background:var(--ink);color:var(--bg);border-color:var(--ink)}
   .compose{display:flex;gap:8px;align-items:flex-end}
+  .attach{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:50%;width:42px;height:42px;font-size:20px;flex:0 0 42px;padding:0}
+  .chipwrap:empty{display:none}
+  .chipwrap{margin-bottom:8px}
+  .chip{display:inline-flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 8px;max-width:100%}
+  .chip img{width:44px;height:44px;object-fit:cover;border-radius:8px}
+  .chip span{font-size:13px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chip button{border:0;background:none;color:var(--muted);font-size:16px;padding:2px 6px}
+  .bubble img.att,.card img.att{display:block;max-width:100%;max-height:220px;border-radius:12px;margin-bottom:6px}
   textarea{flex:1;resize:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:18px;padding:10px 14px;font-family:inherit;font-size:16px;line-height:1.35;max-height:140px;min-height:42px}
   .send{border:0;background:var(--accent);color:#fff;border-radius:50%;width:42px;height:42px;font-size:18px;flex:0 0 42px}
   .send:disabled{opacity:.4}
@@ -144,7 +152,7 @@
       '<main id="feed"><div class="hint">Loading the last few days…</div></main>'+
       '<footer><div class="modes" id="modes">'+
         '<button data-m="" class="sel">Auto</button><button data-m="ask: ">Ask</button><button data-m="draft: ">Check a draft</button><button data-m="teach: ">Teach</button>'+
-      '</div><div class="compose"><textarea id="box" rows="1" placeholder="Ask, paste a draft, or tell Pause something"></textarea><button class="send" id="send" disabled aria-label="Send">&#8593;</button></div></footer>'+
+      '</div><div class="chipwrap" id="chip"></div><div class="compose"><button class="attach" id="attach" aria-label="Attach an image">&#128206;</button><input type="file" id="file" accept="image/*" hidden><textarea id="box" rows="1" placeholder="Ask, paste a draft, or tell Pause something"></textarea><button class="send" id="send" disabled aria-label="Send">&#8593;</button></div></footer>'+
       '<div class="sheet" id="sheet"><div class="inner"><strong>This phone</strong>'+
         '<div>Cards arrive on <code>'+esc(cfg.outTopic)+'</code></div><div>Pause listens on <code>'+esc(cfg.inTopic)+'</code></div>'+
         '<div style="color:var(--muted);font-size:13px">Keep the codes private: anyone who knew them could read your cards.</div>'+
@@ -152,8 +160,15 @@
         '<button id="reload">Reload history</button><button id="forget">Forget codes on this phone</button><button id="close">Close</button></div></div>'+
       '<div class="sheet" id="sheet2"><div class="inner"><strong id="s2-title"></strong><div id="s2-note" style="color:var(--muted);font-size:13px"></div><textarea id="s2-text"></textarea><button id="s2-go" class="primary"></button><button id="s2-close">Close</button></div></div>';
     var box = document.getElementById('box'), send = document.getElementById('send');
-    box.addEventListener('input', function(){ box.style.height = 'auto'; box.style.height = Math.min(box.scrollHeight, 140) + 'px'; send.disabled = !box.value.trim(); });
+    box.addEventListener('input', function(){ box.style.height = 'auto'; box.style.height = Math.min(box.scrollHeight, 140) + 'px'; send.disabled = !box.value.trim() && !pendingFile; });
     send.onclick = function(){ submit(box.value); box.value = ''; box.style.height = 'auto'; send.disabled = true; };
+    document.getElementById('attach').onclick = function(){ document.getElementById('file').click(); };
+    document.getElementById('file').onchange = function(e){
+      var f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+      if (!/^image\//.test(f.type || '')) { alert('Images only.'); return; }
+      if (f.size > 14 * 1024 * 1024) { alert('That image is over 14 MB. Try a screenshot or a smaller photo.'); return; }
+      pendingFile = f; showChip(f); send.disabled = false;
+    };
     document.getElementById('modes').onclick = function(e){ var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function(x){ x.classList.remove('sel'); }); b.classList.add('sel'); };
     document.getElementById('gear').onclick = function(){ document.getElementById('sheet').classList.add('open'); };
     document.getElementById('bell').onclick = enablePush;
@@ -292,7 +307,14 @@
     if (pre) { label = pre[1].toLowerCase(); body = t.slice(pre[0].length); }
     if (label === 'in') return '<div class="msg them"><div class="bubble">'+esc(body)+'</div><div class="meta">'+esc(cfg.name)+' · '+tm(m.time)+'</div></div>';
     var tag = { ask:'question', draft:'draft check', teach:'teaching Pause', note:'note', remember:'teaching Pause', sent:'what you sent' }[label] || '';
-    return '<div class="msg me"><div class="bubble">'+esc(body)+'</div><div class="meta">'+(tag ? tag + ' · ' : '')+tm(m.time)+'</div></div>';
+    var img = attImg(m);
+    if (img && /^You received a file/i.test(body)) body = '';
+    return '<div class="msg me"><div class="bubble">'+img+esc(body)+'</div><div class="meta">'+(tag ? tag + ' · ' : '')+tm(m.time)+'</div></div>';
+  }
+  function attImg(m){
+    var a = m.attachment; if (!a || !a.url || !/^image\//.test(a.type || '')) return '';
+    if (a.expires && a.expires * 1000 < Date.now()) return '<div class="meta" style="padding:0 0 4px">image expired</div>';
+    return '<img class="att" src="' + esc(a.url) + '" alt="' + esc(a.name || 'image') + '">';
   }
   function renderCard(m){
     var title = m.title || 'Pause', body = m.message || '', lines = body.split('\n'), rows = '';
@@ -307,7 +329,7 @@
     });
     var acts = '';
     if (cid) acts = '<div class="acts"><button data-rate="up" data-cid="'+cid+'" class="'+(rated==='up'?'sel':'')+'">&#128077;</button><button data-rate="down" data-cid="'+cid+'" class="'+(rated==='down'?'sel':'')+'">&#128078;</button><button class="reply" data-reply="1">Reply</button></div>';
-    return '<div class="card"><div class="title"><span>'+esc(title)+'</span><time>'+tm(m.time)+'</time></div>'+rows+acts+'</div>';
+    return '<div class="card"><div class="title"><span>'+esc(title)+'</span><time>'+tm(m.time)+'</time></div>'+attImg(m)+rows+acts+'</div>';
   }
   function cardId(m){
     if (!m.actions) return null;
@@ -326,11 +348,27 @@
     return fetch(cfg.server, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ topic: cfg.inTopic, message: message }) })
       .then(function(r){ if (!r.ok) throw new Error('relay ' + r.status); return r.json(); });
   }
+  var pendingFile = null;
+  function showChip(f){
+    var c = document.getElementById('chip'); if (!c) return;
+    if (!f) { c.innerHTML = ''; return; }
+    var url = URL.createObjectURL(f);
+    c.innerHTML = '<div class="chip"><img src="' + url + '" alt=""><span>' + esc(f.name || 'image') + '</span><button id="chipx" aria-label="Remove image">&#10005;</button></div>';
+    document.getElementById('chipx').onclick = function(){ pendingFile = null; showChip(null); var b = document.getElementById('box'); document.getElementById('send').disabled = !b.value.trim(); };
+  }
+  function rfc2047(s){ return /^[\x20-\x7e]*$/.test(s) ? s : '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
+  function postFile(file, message){
+    var h = { 'X-Filename': rfc2047(file.name || 'image.jpg') };
+    if (message) h['X-Message'] = rfc2047(message);
+    return fetch(cfg.server + '/' + encodeURIComponent(cfg.inTopic), { method:'PUT', headers: h, body: file })
+      .then(function(r){ if (!r.ok) throw new Error('relay ' + r.status); return r.json(); });
+  }
   function submit(text){
-    text = (text || '').trim(); if (!text) return;
-    var msg = mode() + text;
+    text = (text || '').trim(); if (!text && !pendingFile) return;
+    var msg = text ? mode() + text : '';
+    var f = pendingFile; pendingFile = null; showChip(null);
     thinkingUntil = Date.now() + 90000;
-    post(msg).then(function(m){ m.topic = cfg.inTopic; if (add(m, true)) render(); else render(); setTimeout(render, 91000); })
+    (f ? postFile(f, msg) : post(msg)).then(function(m){ m.topic = cfg.inTopic; add(m, true); render(); setTimeout(render, 91000); })
       .catch(function(err){ thinkingUntil = 0; render(); alert('Could not send: ' + err.message); });
   }
   function rate(cid, v){
