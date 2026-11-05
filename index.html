@@ -126,7 +126,7 @@
     if (!p['in'] || !p['out']) return null;
     var i = -1; rels.forEach(function(r, k){ if (r.inTopic === p['in']) i = k; });
     var base = i >= 0 ? rels[i] : {};
-    var rel = Object.assign({}, base, { server: p.server || base.server || 'https://ntfy.sh', inTopic: p['in'], outTopic: p['out'], name: p.name || base.name || 'them', mode: p.mode || base.mode || '' });
+    var rel = Object.assign({}, base, { server: p.server || base.server || 'https://ntfy.sh', inTopic: p['in'], outTopic: p['out'], name: p.name || base.name || 'them', mode: p.mode || base.mode || '', tok: p.tok || base.tok || '' });
     if (i >= 0) rels[i] = rel; else rels.push(rel);
     saveJSON(RELS, rels); try { localStorage.setItem(ACTIVE, rel.inTopic); } catch (e) {}
     return rel;
@@ -217,6 +217,10 @@
 
   // ---------- data ----------
   function topicsPath(){ return cfg.server + '/' + encodeURIComponent(cfg.outTopic) + ',' + encodeURIComponent(cfg.inTopic); }
+  // private channels: an ntfy access token rides in the link (tok=); GET and SSE take it as ?auth=, POST/PUT as a header
+  function authQ(rel){ rel = rel || cfg; if (!rel.tok) return ''; var b = btoa('Bearer ' + rel.tok).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); return 'auth=' + b; }
+  function withAuth(url, rel){ var q = authQ(rel); return q ? url + (url.indexOf('?') >= 0 ? '&' : '?') + q : url; }
+  function authHeaders(rel, h){ rel = rel || cfg; h = h || {}; if (rel.tok) h['Authorization'] = 'Bearer ' + rel.tok; return h; }
   // The relay only keeps about twelve hours, so each person's timeline is also kept on this device.
   function cacheKey(){ return 'pause.msgs.' + cfg.inTopic; }
   function slim(m){ var o = { id: m.id, time: m.time, topic: m.topic, title: m.title, message: m.message, tags: m.tags }; if (m.actions) o.actions = m.actions.map(function(a){ return { action: a.action, label: a.label, url: a.url, body: a.body }; }); if (m.attachment) o.attachment = { url: m.attachment.url, name: m.attachment.name, type: m.attachment.type, expires: m.attachment.expires }; return o; }
@@ -225,14 +229,14 @@
   function loadCache(){ var list = loadJSON(cacheKey(), []); list.forEach(function(m){ if (!m || !m.id || seen[m.id]) return; if (isHeartbeat(m)) { seen[m.id] = 1; if (m.time > lastHb) lastHb = m.time; return; } seen[m.id] = 1; messages.push(m); }); }
   function loadHistory(){
     loadCache();
-    fetch(topicsPath() + '/json?poll=1&since=72h').then(function(r){ return r.text(); }).then(function(t){
+    fetch(withAuth(topicsPath() + '/json?poll=1&since=72h')).then(function(r){ return r.text(); }).then(function(t){
       t.split('\n').forEach(function(line){ if (!line.trim()) return; try{ var m = JSON.parse(line); if (m.event === 'message') add(m, false); }catch(e){} });
       render(); connect(); saveCache();
     }).catch(function(){ if (messages.length) { render(); connect(); } else document.getElementById('feed').innerHTML = '<div class="hint">Could not reach the relay. Check your connection and pull to retry.</div>'; });
   }
   function connect(){
     if (es) { es.close(); es = null; }
-    var url = topicsPath() + '/sse' + (lastId ? '?since=' + encodeURIComponent(lastId) : '?since=10s');
+    var url = withAuth(topicsPath() + '/sse' + (lastId ? '?since=' + encodeURIComponent(lastId) : '?since=10s'));
     es = new EventSource(url);
     es.onopen = function(){ setDot(true); };
     es.onerror = function(){ setDot(false); };
@@ -368,7 +372,7 @@
   function attImg(m){
     var a = m.attachment; if (!a || !a.url || !/^image\//.test(a.type || '')) return '';
     if (a.expires && a.expires * 1000 < Date.now()) return '<div class="meta" style="padding:0 0 4px">image expired</div>';
-    return '<img class="att" src="' + esc(a.url) + '" alt="' + esc(a.name || 'image') + '">';
+    return '<img class="att" src="' + esc(withAuth(a.url)) + '" alt="' + esc(a.name || 'image') + '">';
   }
   function renderCard(m){
     var title = m.title || 'Pause', body = m.message || '', lines = body.split('\n'), rows = '';
@@ -399,7 +403,7 @@
 
   // ---------- actions ----------
   function postTo(rel, message){
-    return fetch(rel.server, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ topic: rel.inTopic, message: message }) })
+    return fetch(rel.server, { method:'POST', headers: authHeaders(rel, {'Content-Type':'application/json'}), body: JSON.stringify({ topic: rel.inTopic, message: message }) })
       .then(function(r){ if (!r.ok) throw new Error('relay ' + r.status); return r.json(); });
   }
   function post(message){ return postTo(cfg, message); }
@@ -427,7 +431,7 @@
   }
   function rfc2047(s){ return /^[\x20-\x7e]*$/.test(s) ? s : '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
   function postFile(file, message){
-    var h = { 'X-Filename': rfc2047(file.name || 'image.jpg') };
+    var h = authHeaders(cfg, { 'X-Filename': rfc2047(file.name || 'image.jpg') });
     if (message) h['X-Message'] = rfc2047(message);
     return fetch(cfg.server + '/' + encodeURIComponent(cfg.inTopic), { method:'PUT', headers: h, body: file })
       .then(function(r){ if (!r.ok) throw new Error('relay ' + r.status); return r.json(); });
@@ -486,7 +490,7 @@
     if (same(d, n)) return 'Today'; var y = new Date(n); y.setDate(n.getDate() - 1); if (same(d, y)) return 'Yesterday';
     return d.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }); }
 
-  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible' && cfg) { fetch(topicsPath() + '/json?poll=1&since=' + encodeURIComponent(lastId || '1h')).then(function(r){ return r.text(); }).then(function(t){ var n = false; t.split('\n').forEach(function(line){ if (!line.trim()) return; try{ var m = JSON.parse(line); if (m.event === 'message' && add(m, true)) n = true; }catch(e){} }); if (n) render(); connect(); }).catch(function(){ connect(); }); } });
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible' && cfg) { fetch(withAuth(topicsPath() + '/json?poll=1&since=' + encodeURIComponent(lastId || '1h'))).then(function(r){ return r.text(); }).then(function(t){ var n = false; t.split('\n').forEach(function(line){ if (!line.trim()) return; try{ var m = JSON.parse(line); if (m.event === 'message' && add(m, true)) n = true; }catch(e){} }); if (n) render(); connect(); }).catch(function(){ connect(); }); } });
 
   function boot(){ if (!cfg) return renderSetup(); renderShell(); loadHistory(); swReady().then(resyncPush).catch(function(){}); }
   boot();
