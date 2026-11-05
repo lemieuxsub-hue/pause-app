@@ -65,20 +65,20 @@
   .modes button{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:4px 10px;font-size:12px}
   .modes button.sel{background:var(--ink);color:var(--bg);border-color:var(--ink)}
   .compose{display:flex;gap:8px;align-items:flex-end}
-  textarea{flex:1;resize:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:18px;padding:10px 14px;font:16px/1.35 inherit;max-height:140px;min-height:42px}
+  textarea{flex:1;resize:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:18px;padding:10px 14px;font-family:inherit;font-size:16px;line-height:1.35;max-height:140px;min-height:42px}
   .send{border:0;background:var(--accent);color:#fff;border-radius:50%;width:42px;height:42px;font-size:18px;flex:0 0 42px}
   .send:disabled{opacity:.4}
   .setup{padding:24px 20px;display:flex;flex-direction:column;gap:14px;max-width:420px;margin:auto}
   .setup h2{margin:0}
-  .setup input{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font:16px inherit}
-  .setup button{padding:12px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:600 16px inherit}
+  .setup input{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font-family:inherit;font-size:16px}
+  .setup button{padding:12px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-family:inherit;font-size:16px;font-weight:600}
   .setup p{color:var(--muted);margin:0}
   .hint{text-align:center;color:var(--muted);font-size:13px;padding:24px 12px}
   .sheet{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:flex-end;z-index:20}
   .sheet.open{display:flex}
   .sheet .inner{background:var(--panel);width:100%;border-radius:18px 18px 0 0;padding:18px 18px calc(env(safe-area-inset-bottom) + 18px);display:flex;flex-direction:column;gap:10px}
   .sheet code{font-size:13px;background:var(--card);padding:2px 6px;border-radius:6px}
-  .sheet button{padding:10px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--ink);font:15px inherit}
+  .sheet button{padding:10px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--ink);font-family:inherit;font-size:15px}
 </style>
 </head>
 <body>
