@@ -98,16 +98,23 @@
   .ob-dots i{width:7px;height:7px;border-radius:50%;background:var(--line);display:block}
   .ob-dots i.on{background:var(--accent);width:18px;border-radius:4px}
   .ob-dots i.past{background:var(--teal)}
-  .ob-art{height:min(36vh,260px);display:flex;align-items:center;justify-content:center;margin:8px 0 6px}
-  .ob-art svg{max-width:340px}
-  .ob-text h2{font-size:24px;line-height:1.2;margin:0 0 8px;text-wrap:balance}
-  .ob-text p{color:var(--muted);font-size:16px;line-height:1.45;margin:0 0 8px}
+  .ob-slide{display:flex;flex-direction:column;flex:1}
+  .ob-slide.in{animation:ob-in .38s cubic-bezier(.2,.7,.2,1)}
+  @keyframes ob-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){.ob-slide.in{animation:none}}
+  .ob-art{height:min(38vh,280px);display:flex;align-items:center;justify-content:center;margin:10px 0 14px;border-radius:28px;background:radial-gradient(circle at 50% 42%, var(--wash) 0%, transparent 70%)}
+  .theme-warm{--wash:rgba(200,85,61,.18)}
+  .theme-teal{--wash:rgba(47,111,106,.20)}
+  .ob-art svg{max-width:340px;filter:drop-shadow(0 10px 24px rgba(31,42,55,.12))}
+  .ob-text h2{font-size:28px;line-height:1.15;margin:0 0 10px;letter-spacing:-.2px;text-wrap:balance}
+  .ob-text p{color:var(--muted);font-size:17px;line-height:1.45;margin:0 0 8px}
   .ob-text .ob-code{color:var(--ink);background:var(--card);border-radius:10px;padding:8px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .ob-list{color:var(--muted);font-size:15px;line-height:1.5;padding-left:20px;margin:6px 0}
   .ob-ok{color:var(--teal);font-weight:700}
   .ob-gate{color:var(--accent);font-size:15px}
   .ob-actions{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding-top:12px}
-  .ob-primary{display:block;text-align:center;background:var(--accent);color:#fff;border:0;border-radius:14px;padding:14px;font-size:17px;font-weight:700;text-decoration:none;font-family:inherit}
+  .ob-primary{display:block;text-align:center;background:var(--accent);color:#fff;border:0;border-radius:16px;padding:16px;font-size:17px;font-weight:700;text-decoration:none;font-family:inherit;box-shadow:0 8px 20px rgba(200,85,61,.28)}
+  .ob-primary:active{transform:translateY(1px)}
   .ob-secondary{background:none;border:0;color:var(--muted);font-size:15px;padding:8px;font-family:inherit}
   .ob-step{text-align:center;color:var(--muted);font-size:12px;margin:6px 0 0}
   #status:empty{display:none}
@@ -520,7 +527,8 @@
   function obSteps(){
     var mac = cfg.mode === 'mac', name = esc(cfg.name);
     var steps = [
-      { id: 'welcome', title: 'Pause, for texting with ' + name, body: 'About a minute after ' + name + ' texts you, a short card arrives: what they are really saying, whether to reply now, later or not at all, one draft in your voice, and the one thing not to send. It never sends anything for you.', art: artCard(), primary: 'Set it up', done: function(){ return false; } },
+      { id: 'intro1', intro: true, theme: 'warm', title: 'A pause button for texting.', body: 'A minute after ' + name + ' texts, Pause tells you what the message really means, and whether to answer now, later, or not at all.', art: artHero(name), primary: 'Next', secondary: 'Skip the tour', skip: true, done: function(){ return false; } },
+      { id: 'intro2', intro: true, theme: 'teal', title: 'It learns the two of you.', body: 'One draft in your voice when a reply is worth sending. Teach it in a sentence. Thumbs on every card. It never sends anything for you.', art: artLearn(), primary: 'Set it up', done: function(){ return false; } },
       { id: 'install', title: 'Put Pause on your Home Screen', body: isIOS() ? 'Tap the Share button at the bottom of Safari, then <b>Add to Home Screen</b>, then <b>Add</b>. Open Pause from the new icon; this setup picks up where you left off.' : isMacSafari() ? 'In Safari, choose <b>File → Add to Dock</b>, then open Pause from the Dock.' : 'Click the install icon at the right of the address bar (or ⋮ → Cast, save and share → Install page as app), then open Pause from the Dock or Start menu.', art: artInstall(), primary: null, secondary: 'I’ll do this later', done: isStandalone },
       { id: 'notify', title: 'Let Pause notify you', body: 'Cards, answers and nudges arrive as notifications from Pause. Tap the button, then <b>Allow</b>.', art: artBell(), primary: 'Turn on notifications', act: 'push', secondary: 'Not now', done: pushOn, gate: function(){ return !('PushManager' in window) && isIOS() ? 'Finish the Home Screen step first: iPhone only allows notifications for an installed app.' : ''; } }
     ];
@@ -536,27 +544,32 @@
   }
   function startOnboarding(step){ ob.open = true; ob.step = step || 0; var el = document.getElementById('onboard'); if (!el) { el = document.createElement('div'); el.id = 'onboard'; document.body.appendChild(el); } obRender(); clearInterval(ob.timer); ob.timer = setInterval(obTick, 2000); }
   function endOnboarding(){ ob.open = false; clearInterval(ob.timer); var el = document.getElementById('onboard'); if (el) el.remove(); cfg.onboarded = true; saveRels(); renderSetup(); }
-  function obTick(){ if (!ob.open) return; var s = obSteps()[ob.step]; if (s && s.id !== 'welcome' && s.id !== 'done' && s.done()) { ob.step = Math.min(ob.step + 1, obSteps().length - 1); obRender(); } }
+  function obTick(){ if (!ob.open) return; var s = obSteps()[ob.step]; if (s && !s.intro && s.id !== 'done' && s.done()) { ob.step = Math.min(ob.step + 1, obSteps().length - 1); obRender(); } }
   function obRender(){
     var el = document.getElementById('onboard'); if (!el) return;
-    var steps = obSteps(), s = steps[ob.step], n = steps.length, isDone = s.done();
+    var steps = obSteps(), s = steps[ob.step], isDone = !s.intro && s.done();
+    var setupSteps = steps.filter(function(x){ return !x.intro; }), setupIndex = setupSteps.indexOf(s);
     var gate = s.gate ? s.gate() : '';
     var dots = steps.map(function(x, i){ return '<i class="' + (i === ob.step ? 'on' : (i < ob.step ? 'past' : '')) + '"></i>'; }).join('');
     var primary = '';
-    if (isDone && s.id !== 'welcome') primary = '<button class="ob-primary" data-ob="next">Done, next</button>';
+    if (isDone) primary = '<button class="ob-primary" data-ob="next">Done, next</button>';
     else if (gate) primary = '<p class="ob-gate">' + gate + '</p>';
     else if (s.href) primary = '<a class="ob-primary" href="' + s.href + '">' + s.primary + '</a>';
     else if (s.primary) primary = '<button class="ob-primary" data-ob="' + (s.act || 'next') + '">' + s.primary + '</button>';
-    var secondary = s.secondary ? '<button class="ob-secondary" data-ob="next">' + s.secondary + '</button>' : '';
-    var status = isDone && s.id !== 'welcome' && s.id !== 'done' ? '<p class="ob-ok">Done</p>' : '';
+    var secondary = s.secondary ? '<button class="ob-secondary" data-ob="' + (s.skip ? 'skip' : 'next') + '">' + s.secondary + '</button>' : '';
+    var status = isDone && s.id !== 'done' ? '<p class="ob-ok">Done</p>' : '';
+    var counter = s.intro ? '' : (s.id === 'done' ? 'All set' : 'Step ' + (setupIndex + 1) + ' of ' + (setupSteps.length - 1));
+    el.className = 'theme-' + (s.theme || (s.id === 'done' ? 'teal' : 'warm'));
     el.innerHTML = '<div class="ob-top"><button class="ob-back" data-ob="back"' + (ob.step === 0 ? ' disabled' : '') + '>‹</button><div class="ob-dots">' + dots + '</div><button class="ob-close" data-ob="close" aria-label="Close">✕</button></div>' +
-      '<div class="ob-art">' + s.art + '</div><div class="ob-text"><h2>' + s.title + '</h2>' + status + '<p>' + s.body + '</p></div>' +
-      '<div class="ob-actions">' + primary + secondary + '</div><p class="ob-step">Step ' + (ob.step + 1) + ' of ' + n + '</p>';
+      '<div class="ob-slide"><div class="ob-art">' + s.art + '</div><div class="ob-text"><h2>' + s.title + '</h2>' + status + '<p>' + s.body + '</p></div></div>' +
+      '<div class="ob-actions">' + primary + secondary + '</div><p class="ob-step">' + counter + '</p>';
+    var slide = el.querySelector('.ob-slide'); if (slide) { slide.classList.remove('in'); void slide.offsetWidth; slide.classList.add('in'); }
   }
   document.addEventListener('click', function(e){
     var b = e.target.closest('[data-ob]'); if (!b || !ob.open) return;
     var act = b.getAttribute('data-ob'), steps = obSteps();
     if (act === 'back') { ob.step = Math.max(0, ob.step - 1); obRender(); }
+    else if (act === 'skip') { var first = 0; steps.forEach(function(x, i){ if (x.intro && first === i) first = i + 1; }); ob.step = Math.min(first, steps.length - 1); obRender(); }
     else if (act === 'next') { if (ob.step >= steps.length - 1) endOnboarding(); else { ob.step++; obRender(); } }
     else if (act === 'close') { endOnboarding(); }
     else if (act === 'finish') { endOnboarding(); }
@@ -566,8 +579,25 @@
   });
   var importMode = false;
   function artWrap(inner){ return '<svg viewBox="0 0 320 200" width="100%" height="100%" aria-hidden="true">' + inner + '</svg>'; }
-  function phone(x, y, w, h){ return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="18" style="fill:var(--panel);stroke:var(--line)" stroke-width="3"/>'; }
-  function artCard(){ return artWrap(phone(60, 10, 200, 190) + '<rect x="78" y="44" width="164" height="110" rx="12" style="fill:var(--card)"/><text x="90" y="66" font-size="11" font-weight="700" style="fill:var(--accent)">READ</text><rect x="128" y="58" width="100" height="8" rx="4" style="fill:var(--line)"/><text x="90" y="88" font-size="11" font-weight="700" style="fill:var(--accent)">STANCE</text><rect x="136" y="80" width="80" height="8" rx="4" style="fill:var(--line)"/><text x="90" y="110" font-size="11" font-weight="700" style="fill:var(--accent)">DRAFT</text><rect x="130" y="102" width="96" height="8" rx="4" style="fill:var(--teal)" opacity=".6"/><text x="90" y="132" font-size="11" font-weight="700" style="fill:var(--accent)">DON’T</text><rect x="130" y="124" width="70" height="8" rx="4" style="fill:var(--line)"/>'); }
+  // a phone frame with a notch; every step picture sits inside one
+  function phone(x, y, w, h){ return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="24" style="fill:var(--panel);stroke:var(--line)" stroke-width="3"/><rect x="' + (x + w / 2 - 28) + '" y="' + (y + 2) + '" width="56" height="12" rx="6" style="fill:var(--line)"/>'; }
+  function artHero(name){
+    return artWrap(phone(60, 4, 200, 196) +
+      '<rect x="74" y="34" width="172" height="124" rx="14" style="fill:var(--ink)"/>' +
+      '<text x="86" y="54" font-size="10.5" font-weight="700" style="fill:var(--accent)">' + name + ' · 6:14 PM</text>' +
+      '<text x="86" y="74" font-size="9.5" font-weight="700" style="fill:var(--bg)" opacity=".7">READ</text><text x="128" y="74" font-size="9.5" style="fill:var(--bg)">Tired, not upset with you.</text>' +
+      '<text x="86" y="92" font-size="9.5" font-weight="700" style="fill:var(--bg)" opacity=".7">STANCE</text><text x="128" y="92" font-size="9.5" font-weight="700" style="fill:var(--bg)">Reply, short.</text>' +
+      '<rect x="86" y="101" width="148" height="22" rx="7" style="fill:var(--teal)" opacity=".85"/><text x="94" y="115" font-size="9.5" font-style="italic" fill="#fff">“Long one. Feet up, I’ve got the morning.”</text>' +
+      '<text x="86" y="140" font-size="9.5" font-weight="700" style="fill:var(--bg)" opacity=".7">DON’T</text><text x="128" y="140" font-size="9.5" style="fill:var(--bg)">No “are we okay?” tonight.</text>' +
+      '<rect x="150" y="166" width="96" height="22" rx="11" style="fill:var(--card)"/><text x="198" y="181" text-anchor="middle" font-size="11" style="fill:var(--ink)">👍 &#160; 👎 &#160; Reply</text>');
+  }
+  function artLearn(){
+    return artWrap(
+      '<rect x="36" y="46" width="160" height="40" rx="18" style="fill:var(--ink)"/><text x="52" y="70" font-size="11" style="fill:var(--bg)">I always send a goodnight.</text>' +
+      '<rect x="124" y="104" width="160" height="40" rx="18" style="fill:var(--card)"/><text x="142" y="128" font-size="11" font-weight="700" style="fill:var(--teal)">Learned. </text><text x="200" y="128" font-size="11" style="fill:var(--ink)">I’ll keep that.</text>' +
+      '<g transform="translate(262,52)"><circle r="22" style="fill:var(--panel);stroke:var(--line)" stroke-width="3"/><rect x="-8" y="-3" width="16" height="13" rx="3" style="fill:var(--teal)"/><path d="M-5 -3 V-8 a5 5 0 0 1 10 0 V-3" fill="none" style="stroke:var(--teal)" stroke-width="3"/></g>' +
+      '<text x="36" y="178" font-size="11" style="fill:var(--muted)">Your memory. Nothing is ever sent for you.</text>');
+  }
   function artInstall(){ return artWrap(phone(60, 10, 200, 190) + '<rect x="78" y="150" width="164" height="36" rx="8" style="fill:var(--card)"/><text x="160" y="173" text-anchor="middle" font-size="13" font-weight="700" style="fill:var(--ink)">Add to Home Screen</text><g transform="translate(150,70)"><rect x="-26" y="-6" width="52" height="56" rx="8" fill="none" style="stroke:var(--teal)" stroke-width="4"/><path d="M0 -26 V22 M-14 -12 L0 -26 L14 -12" fill="none" style="stroke:var(--teal)" stroke-width="4" stroke-linecap="round"/></g><circle cx="160" cy="130" r="4" style="fill:var(--accent)"/>'); }
   function artBell(){ return artWrap(phone(60, 10, 200, 190) + '<g transform="translate(160,95)"><path d="M-26 20 Q-26 -20 0 -24 Q26 -20 26 20 L32 30 L-32 30 Z" style="fill:var(--accent)" opacity=".9"/><circle cx="0" cy="38" r="7" style="fill:var(--accent)"/></g><rect x="92" y="150" width="136" height="28" rx="14" style="fill:var(--card)"/><text x="160" y="169" text-anchor="middle" font-size="13" font-weight="700" style="fill:var(--teal)">Allow</text>'); }
   function artShortcut(){ return artWrap(phone(60, 10, 200, 190) + '<rect x="86" y="50" width="148" height="56" rx="14" style="fill:var(--teal)"/><text x="160" y="84" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">Pause In</text><rect x="86" y="120" width="148" height="30" rx="8" style="fill:var(--card)"/><text x="160" y="140" text-anchor="middle" font-size="12" style="fill:var(--ink)">Your code · paste here</text>'); }
