@@ -2,8 +2,6 @@
   "name": "Pause",
   "short_name": "Pause",
   "description": "A pause button for texting one person.",
-  "start_url": "./",
-  "scope": "./",
   "display": "standalone",
   "background_color": "#1F2A37",
   "theme_color": "#1F2A37",

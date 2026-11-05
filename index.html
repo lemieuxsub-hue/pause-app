@@ -96,7 +96,9 @@
     var h = location.hash.replace(/^#/, '');
     if (h) {
       var p = {}; h.split('&').forEach(function(kv){ var i = kv.indexOf('='); if (i > 0) p[decodeURIComponent(kv.slice(0,i))] = decodeURIComponent(kv.slice(i+1)); });
-      if (p['in'] && p['out']) { c = { server: p.server || 'https://ntfy.sh', inTopic: p['in'], outTopic: p['out'], name: p.name || 'them' }; saveJSON(LS, c); history.replaceState(null, '', location.pathname); }
+      // keep the hash in the address: iOS copies the page URL when adding to the Home Screen, and the
+      // installed app gets its own storage, so the codes must ride along in the link itself
+      if (p['in'] && p['out']) { c = { server: p.server || 'https://ntfy.sh', inTopic: p['in'], outTopic: p['out'], name: p.name || 'them' }; saveJSON(LS, c); }
     }
     return c;
   }
