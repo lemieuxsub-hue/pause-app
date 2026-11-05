@@ -90,6 +90,26 @@
   .sheet button{padding:10px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--ink);font-family:inherit;font-size:15px}
   .sheet textarea{width:100%;min-height:140px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);padding:10px;font-family:inherit;font-size:14px;resize:vertical}
   .sheet .primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+  #onboard{position:fixed;inset:0;z-index:30;background:var(--bg);display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top) + 10px) max(16px, env(safe-area-inset-left)) calc(env(safe-area-inset-bottom) + 16px) max(16px, env(safe-area-inset-right));overflow-y:auto}
+  .ob-top{display:flex;align-items:center;gap:10px}
+  .ob-back,.ob-close{border:0;background:none;color:var(--muted);font-size:22px;width:36px;height:36px;border-radius:50%}
+  .ob-back:disabled{opacity:.3}
+  .ob-dots{flex:1;display:flex;justify-content:center;gap:6px}
+  .ob-dots i{width:7px;height:7px;border-radius:50%;background:var(--line);display:block}
+  .ob-dots i.on{background:var(--accent);width:18px;border-radius:4px}
+  .ob-dots i.past{background:var(--teal)}
+  .ob-art{height:min(36vh,260px);display:flex;align-items:center;justify-content:center;margin:8px 0 6px}
+  .ob-art svg{max-width:340px}
+  .ob-text h2{font-size:24px;line-height:1.2;margin:0 0 8px;text-wrap:balance}
+  .ob-text p{color:var(--muted);font-size:16px;line-height:1.45;margin:0 0 8px}
+  .ob-text .ob-code{color:var(--ink);background:var(--tint);border-radius:10px;padding:8px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ob-list{color:var(--muted);font-size:15px;line-height:1.5;padding-left:20px;margin:6px 0}
+  .ob-ok{color:var(--teal);font-weight:700}
+  .ob-gate{color:var(--accent);font-size:15px}
+  .ob-actions{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding-top:12px}
+  .ob-primary{display:block;text-align:center;background:var(--accent);color:#fff;border:0;border-radius:14px;padding:14px;font-size:17px;font-weight:700;text-decoration:none;font-family:inherit}
+  .ob-secondary{background:none;border:0;color:var(--muted);font-size:15px;padding:8px;font-family:inherit}
+  .ob-step{text-align:center;color:var(--muted);font-size:12px;margin:6px 0 0}
   #status:empty{display:none}
   .banner{background:var(--card);color:var(--ink);border-bottom:1px solid var(--line);padding:10px 16px;font-size:14px;line-height:1.35}
   #setup{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px 4px;max-height:48vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -153,8 +173,8 @@
   window.addEventListener('hashchange', function(){ var r = upsertRel(parseHash(location.hash)); if (r) { if (r === cfg) renderShell(); switchRel(r.inTopic); } });
   if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', function(ev){ var d = ev.data || {}; if (d.type === 'open' && d.url) { var i = d.url.indexOf('#'); if (i >= 0) { var r = upsertRel(parseHash(d.url.slice(i))); if (r) switchRel(r.inTopic); } } });
 
-  // ---------- setup screen ----------
-  function renderSetup(){
+  // ---------- no codes yet: ask for them ----------
+  function renderCodes(){
     app.innerHTML = '<div class="setup"><h2>Pause</h2><p>Enter the two channel codes from your welcome note. They stay on this phone.</p>'+
       '<input id="s-out" placeholder="Cards arrive on (e.g. pause-xxxx-1a2b3c4d)" autocapitalize="off" autocorrect="off">'+
       '<input id="s-in" placeholder="Pause listens on (e.g. pause-xxxx-in-5e6f7a8b)" autocapitalize="off" autocorrect="off">'+
@@ -195,6 +215,7 @@
       if (fs.some(function(f){ return f.size > 14 * 1024 * 1024; })) { alert('One of those is over 14 MB. Try screenshots or smaller photos.'); return; }
       if (fs.length > 20) { alert('Up to 20 images at a time.'); return; }
       pendingFile = fs.length === 1 ? fs[0] : fs; showChip(fs.length === 1 ? fs[0] : fs); send.disabled = false;
+      if (importMode) { importMode = false; endOnboarding(); submit('import'); }
     };
     document.getElementById('modes').onclick = function(e){ var b = e.target.closest('button'); if (!b) return; if (b.hasAttribute('data-quick')) { thinkingUntil = Date.now() + 90000; post(b.getAttribute('data-quick')).then(function(m){ m.topic = cfg.inTopic; add(m, true); render(); setTimeout(render, 91000); }).catch(function(err){ thinkingUntil = 0; render(); alert('Could not send: ' + err.message); }); return; } [].forEach.call(this.children, function(x){ if (!x.hasAttribute('data-quick')) x.classList.remove('sel'); }); b.classList.add('sel'); };
     document.getElementById('gear').onclick = function(){ document.getElementById('sheet').classList.add('open'); };
@@ -203,7 +224,7 @@
     document.getElementById('close').onclick = function(){ document.getElementById('sheet').classList.remove('open'); };
     document.getElementById('reload').onclick = function(){ document.getElementById('sheet').classList.remove('open'); messages = []; seen = {}; lastId = null; loadHistory(); };
     document.getElementById('forget').onclick = function(){ if (confirm('Forget everyone on this device?')) { try { localStorage.removeItem(LS); localStorage.removeItem(RELS); localStorage.removeItem(ACTIVE); } catch (e) {} location.hash = ''; location.reload(); } };
-    document.getElementById('showsetup').onclick = function(){ cfg.setupDone = false; saveRels(); document.getElementById('sheet').classList.remove('open'); renderSetup(); };
+    document.getElementById('showsetup').onclick = function(){ document.getElementById('sheet').classList.remove('open'); startOnboarding(0); };
     document.getElementById('addperson').onclick = function(){ document.getElementById('sheet').classList.remove('open'); addPersonSheet(); };
     var rm = document.getElementById('removeperson');
     if (rm) rm.onclick = function(){ if (!confirm('Remove ' + cfg.name + ' from this device? Nothing on the server changes.')) return; rels = rels.filter(function(r){ return r !== cfg; }); cfg = rels[0]; saveRels(); document.getElementById('sheet').classList.remove('open'); if (es) { es.close(); es = null; } messages = []; seen = {}; lastId = null; renderShell(); loadHistory(); };
@@ -492,7 +513,69 @@
 
   document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible' && cfg) { fetch(withAuth(topicsPath() + '/json?poll=1&since=' + encodeURIComponent(lastId || '1h'))).then(function(r){ return r.text(); }).then(function(t){ var n = false; t.split('\n').forEach(function(line){ if (!line.trim()) return; try{ var m = JSON.parse(line); if (m.event === 'message' && add(m, true)) n = true; }catch(e){} }); if (n) render(); connect(); }).catch(function(){ connect(); }); } });
 
-  function boot(){ if (!cfg) return renderSetup(); renderShell(); loadHistory(); swReady().then(resyncPush).catch(function(){}); }
+  function boot(){ if (!cfg) return renderCodes(); renderShell(); loadHistory(); swReady().then(resyncPush).catch(function(){}); if (!cfg.onboarded && !cfg.setupDone) startOnboarding(0); }
+
+  // ---------- onboarding carousel: one step at a time, pictures, auto-advance when a step can be detected ----------
+  var ob = { open: false, step: 0, timer: null, mac: false };
+  function obSteps(){
+    var mac = cfg.mode === 'mac', name = esc(cfg.name);
+    var steps = [
+      { id: 'welcome', title: 'Pause, for texting with ' + name, body: 'About a minute after ' + name + ' texts you, a short card arrives: what they are really saying, whether to reply now, later or not at all, one draft in your voice, and the one thing not to send. It never sends anything for you.', art: artCard(), primary: 'Set it up', done: function(){ return false; } },
+      { id: 'install', title: 'Put Pause on your Home Screen', body: isIOS() ? 'Tap the Share button at the bottom of Safari, then <b>Add to Home Screen</b>, then <b>Add</b>. Open Pause from the new icon; this setup picks up where you left off.' : isMacSafari() ? 'In Safari, choose <b>File → Add to Dock</b>, then open Pause from the Dock.' : 'Click the install icon at the right of the address bar (or ⋮ → Cast, save and share → Install page as app), then open Pause from the Dock or Start menu.', art: artInstall(), primary: null, secondary: 'I’ll do this later', done: isStandalone },
+      { id: 'notify', title: 'Let Pause notify you', body: 'Cards, answers and nudges arrive as notifications from Pause. Tap the button, then <b>Allow</b>.', art: artBell(), primary: 'Turn on notifications', act: 'push', secondary: 'Not now', done: pushOn, gate: function(){ return !('PushManager' in window) && isIOS() ? 'Finish the Home Screen step first: iPhone only allows notifications for an installed app.' : ''; } }
+    ];
+    if (!mac) {
+      steps.push({ id: 'shortcut', title: 'Add the forwarding shortcut', body: 'This is how ' + name + '’s texts reach Pause. Tap the button; Shortcuts opens and asks for your code. Paste it in and tap Add Shortcut.<p class="ob-code">Your code: <span class="code">' + esc(cfg.inTopic) + '</span> <button class="btn" data-copy="' + esc(cfg.inTopic) + '">Copy</button></p>', art: artShortcut(), primary: 'Add the forwarding shortcut', href: 'shortcuts://import-shortcut/?url=' + encodeURIComponent(APP_BASE + 'pause-in.shortcut') + '&name=' + encodeURIComponent('Pause In'), secondary: 'Added it, next', done: function(){ return false; } });
+      steps.push({ id: 'allow', title: 'Tap it once, choose Always Allow', body: 'In Shortcuts, tap the new <b>Pause In</b> tile one time. iOS asks whether it may connect to ntfy.sh: choose <b>Always Allow</b>. It may show a small error because it had nothing to forward yet; that is fine. Skipping this makes it fail silently later.', art: artAllow(), primary: 'Done, next', secondary: null, done: function(){ return false; } });
+      steps.push({ id: 'automation', title: 'Let it run when ' + name + ' texts', body: 'In Shortcuts, tap <b>Automation</b> at the bottom, then <b>+</b>, then <b>Message</b>.<ol class="ob-list"><li>Sender: <b>' + name + '</b> from Contacts</li><li>Leave “Message Contains” empty</li><li>Choose <b>Run Immediately</b>; turn <b>Notify When Run</b> off</li><li>Tap <b>Next</b>, choose <b>Pause In</b>, tap <b>Done</b></li></ol>This step confirms itself when ' + name + '’s next text comes through.', art: artAutomation(), primary: 'Done, next', secondary: null, done: function(){ return !!lastIncoming(); } });
+      steps.push({ id: 'history', title: 'Give Pause the past (optional)', body: 'Pause only sees texts from now on. To give it the last few weeks, scroll back through your conversation and take a run of screenshots, then pick them all here. Pause reads them and builds the history; overlaps are fine.', art: artShots(), primary: 'Add screenshots', act: 'import', secondary: 'Skip for now', done: function(){ return false; } });
+    }
+    steps.push({ id: 'interview', title: 'Teach Pause about the two of you', body: 'Twelve short questions, one at a time, right in the thread. A sentence or two each; type <b>skip</b> to pass on one, <b>done</b> to stop early. If you already keep notes with another AI, you can paste a profile instead.', art: artChat(), primary: 'Start the interview', act: 'start', secondary: 'Later', done: interviewDone });
+    steps.push({ id: 'done', title: 'You’re set', body: 'The next time ' + name + ' texts, a card arrives in about a minute. Ask anything in the box below, check a draft before you send it, or tap <b>Best next move?</b> Thumbs on every card teach it.', art: artDone(), primary: 'Open Pause', act: 'finish', done: function(){ return false; } });
+    return steps;
+  }
+  function startOnboarding(step){ ob.open = true; ob.step = step || 0; var el = document.getElementById('onboard'); if (!el) { el = document.createElement('div'); el.id = 'onboard'; document.body.appendChild(el); } obRender(); clearInterval(ob.timer); ob.timer = setInterval(obTick, 2000); }
+  function endOnboarding(){ ob.open = false; clearInterval(ob.timer); var el = document.getElementById('onboard'); if (el) el.remove(); cfg.onboarded = true; saveRels(); renderSetup(); }
+  function obTick(){ if (!ob.open) return; var s = obSteps()[ob.step]; if (s && s.id !== 'welcome' && s.id !== 'done' && s.done()) { ob.step = Math.min(ob.step + 1, obSteps().length - 1); obRender(); } }
+  function obRender(){
+    var el = document.getElementById('onboard'); if (!el) return;
+    var steps = obSteps(), s = steps[ob.step], n = steps.length, isDone = s.done();
+    var gate = s.gate ? s.gate() : '';
+    var dots = steps.map(function(x, i){ return '<i class="' + (i === ob.step ? 'on' : (i < ob.step ? 'past' : '')) + '"></i>'; }).join('');
+    var primary = '';
+    if (isDone && s.id !== 'welcome') primary = '<button class="ob-primary" data-ob="next">Done, next</button>';
+    else if (gate) primary = '<p class="ob-gate">' + gate + '</p>';
+    else if (s.href) primary = '<a class="ob-primary" href="' + s.href + '">' + s.primary + '</a>';
+    else if (s.primary) primary = '<button class="ob-primary" data-ob="' + (s.act || 'next') + '">' + s.primary + '</button>';
+    var secondary = s.secondary ? '<button class="ob-secondary" data-ob="next">' + s.secondary + '</button>' : '';
+    var status = isDone && s.id !== 'welcome' && s.id !== 'done' ? '<p class="ob-ok">Done</p>' : '';
+    el.innerHTML = '<div class="ob-top"><button class="ob-back" data-ob="back"' + (ob.step === 0 ? ' disabled' : '') + '>‹</button><div class="ob-dots">' + dots + '</div><button class="ob-close" data-ob="close" aria-label="Close">✕</button></div>' +
+      '<div class="ob-art">' + s.art + '</div><div class="ob-text"><h2>' + s.title + '</h2>' + status + '<p>' + s.body + '</p></div>' +
+      '<div class="ob-actions">' + primary + secondary + '</div><p class="ob-step">Step ' + (ob.step + 1) + ' of ' + n + '</p>';
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-ob]'); if (!b || !ob.open) return;
+    var act = b.getAttribute('data-ob'), steps = obSteps();
+    if (act === 'back') { ob.step = Math.max(0, ob.step - 1); obRender(); }
+    else if (act === 'next') { if (ob.step >= steps.length - 1) endOnboarding(); else { ob.step++; obRender(); } }
+    else if (act === 'close') { endOnboarding(); }
+    else if (act === 'finish') { endOnboarding(); }
+    else if (act === 'push') { enablePush(); }
+    else if (act === 'start') { post('start').then(function(m){ seen[m.id] = 1; thinkingUntil = Date.now() + 60000; endOnboarding(); render(); }).catch(function(err){ alert('Could not send: ' + err.message); }); }
+    else if (act === 'import') { importMode = true; document.getElementById('file').click(); }
+  });
+  var importMode = false;
+  function artWrap(inner){ return '<svg viewBox="0 0 320 200" width="100%" height="100%" aria-hidden="true">' + inner + '</svg>'; }
+  function phone(x, y, w, h){ return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="18" fill="var(--panel)" stroke="var(--line)" stroke-width="3"/>'; }
+  function artCard(){ return artWrap(phone(60, 10, 200, 190) + '<rect x="78" y="44" width="164" height="110" rx="12" fill="var(--tint)"/><text x="90" y="66" font-size="11" font-weight="700" fill="var(--accent)">READ</text><rect x="128" y="58" width="100" height="8" rx="4" fill="var(--line)"/><text x="90" y="88" font-size="11" font-weight="700" fill="var(--accent)">STANCE</text><rect x="136" y="80" width="80" height="8" rx="4" fill="var(--line)"/><text x="90" y="110" font-size="11" font-weight="700" fill="var(--accent)">DRAFT</text><rect x="130" y="102" width="96" height="8" rx="4" fill="var(--teal)" opacity=".6"/><text x="90" y="132" font-size="11" font-weight="700" fill="var(--accent)">DON’T</text><rect x="130" y="124" width="70" height="8" rx="4" fill="var(--line)"/>'); }
+  function artInstall(){ return artWrap(phone(60, 10, 200, 190) + '<rect x="78" y="150" width="164" height="36" rx="8" fill="var(--tint)"/><text x="160" y="173" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">Add to Home Screen</text><g transform="translate(150,70)"><rect x="-26" y="-6" width="52" height="56" rx="8" fill="none" stroke="var(--teal)" stroke-width="4"/><path d="M0 -26 V22 M-14 -12 L0 -26 L14 -12" fill="none" stroke="var(--teal)" stroke-width="4" stroke-linecap="round"/></g><circle cx="160" cy="130" r="4" fill="var(--accent)"/>'); }
+  function artBell(){ return artWrap(phone(60, 10, 200, 190) + '<g transform="translate(160,95)"><path d="M-26 20 Q-26 -20 0 -24 Q26 -20 26 20 L32 30 L-32 30 Z" fill="var(--accent)" opacity=".9"/><circle cx="0" cy="38" r="7" fill="var(--accent)"/></g><rect x="92" y="150" width="136" height="28" rx="14" fill="var(--tint)"/><text x="160" y="169" text-anchor="middle" font-size="13" font-weight="700" fill="var(--teal)">Allow</text>'); }
+  function artShortcut(){ return artWrap(phone(60, 10, 200, 190) + '<rect x="86" y="50" width="148" height="56" rx="14" fill="var(--teal)"/><text x="160" y="84" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">Pause In</text><rect x="86" y="120" width="148" height="30" rx="8" fill="var(--tint)"/><text x="160" y="140" text-anchor="middle" font-size="12" fill="var(--ink)">Your code · paste here</text>'); }
+  function artAllow(){ return artWrap(phone(60, 10, 200, 190) + '<rect x="80" y="60" width="160" height="90" rx="14" fill="var(--tint)"/><text x="160" y="86" text-anchor="middle" font-size="11" fill="var(--ink)">Allow “Pause In” to</text><text x="160" y="102" text-anchor="middle" font-size="11" fill="var(--ink)">connect to ntfy.sh?</text><rect x="92" y="116" width="136" height="24" rx="12" fill="var(--teal)"/><text x="160" y="132" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Always Allow</text>'); }
+  function artAutomation(){ return artWrap(phone(60, 10, 200, 190) + '<text x="160" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="var(--muted)">AUTOMATION</text><rect x="84" y="60" width="152" height="26" rx="8" fill="var(--tint)"/><text x="94" y="77" font-size="11" fill="var(--ink)">When I get a message</text><rect x="84" y="92" width="152" height="26" rx="8" fill="var(--tint)"/><text x="94" y="109" font-size="11" fill="var(--ink)">Run Immediately</text><rect x="84" y="124" width="152" height="26" rx="8" fill="var(--teal)"/><text x="94" y="141" font-size="11" font-weight="700" fill="#fff">Run Pause In</text>'); }
+  function artShots(){ return artWrap('<g>' + [40, 100, 160].map(function(x, i){ return '<rect x="' + x + '" y="' + (30 + i * 10) + '" width="110" height="150" rx="12" fill="var(--panel)" stroke="var(--line)" stroke-width="3"/><rect x="' + (x + 12) + '" y="' + (50 + i * 10) + '" width="60" height="10" rx="5" fill="var(--tint)"/><rect x="' + (x + 38) + '" y="' + (70 + i * 10) + '" width="60" height="10" rx="5" fill="var(--teal)" opacity=".6"/><rect x="' + (x + 12) + '" y="' + (90 + i * 10) + '" width="50" height="10" rx="5" fill="var(--tint)"/>'; }).join('') + '</g><circle cx="270" cy="150" r="22" fill="var(--accent)"/><text x="270" y="156" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">+</text>'); }
+  function artChat(){ return artWrap(phone(60, 10, 200, 190) + '<rect x="80" y="50" width="120" height="28" rx="12" fill="var(--tint)"/><rect x="120" y="88" width="120" height="28" rx="12" fill="var(--ink)"/><rect x="80" y="126" width="100" height="28" rx="12" fill="var(--tint)"/><text x="90" y="68" font-size="11" fill="var(--ink)">Who are they to you?</text>'); }
+  function artDone(){ return artWrap('<circle cx="160" cy="100" r="54" fill="var(--teal)"/><path d="M132 102 L152 122 L190 80" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>'); }
   boot();
 })();
 </script>
