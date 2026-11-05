@@ -213,11 +213,18 @@
 
   // ---------- data ----------
   function topicsPath(){ return cfg.server + '/' + encodeURIComponent(cfg.outTopic) + ',' + encodeURIComponent(cfg.inTopic); }
+  // The relay only keeps about twelve hours, so each person's timeline is also kept on this device.
+  function cacheKey(){ return 'pause.msgs.' + cfg.inTopic; }
+  function slim(m){ var o = { id: m.id, time: m.time, topic: m.topic, title: m.title, message: m.message }; if (m.actions) o.actions = m.actions.map(function(a){ return { action: a.action, label: a.label, url: a.url, body: a.body }; }); if (m.attachment) o.attachment = { url: m.attachment.url, name: m.attachment.name, type: m.attachment.type, expires: m.attachment.expires }; return o; }
+  var saveTimer = null;
+  function saveCache(){ clearTimeout(saveTimer); saveTimer = setTimeout(function(){ try { var keep = messages.slice().sort(function(a,b){ return a.time - b.time; }).slice(-400).map(slim); localStorage.setItem(cacheKey(), JSON.stringify(keep)); } catch (e) {} }, 800); }
+  function loadCache(){ var list = loadJSON(cacheKey(), []); list.forEach(function(m){ if (m && m.id && !seen[m.id]) { seen[m.id] = 1; messages.push(m); } }); }
   function loadHistory(){
+    loadCache();
     fetch(topicsPath() + '/json?poll=1&since=72h').then(function(r){ return r.text(); }).then(function(t){
       t.split('\n').forEach(function(line){ if (!line.trim()) return; try{ var m = JSON.parse(line); if (m.event === 'message') add(m, false); }catch(e){} });
-      render(); connect();
-    }).catch(function(){ document.getElementById('feed').innerHTML = '<div class="hint">Could not reach the relay. Check your connection and pull to retry.</div>'; });
+      render(); connect(); saveCache();
+    }).catch(function(){ if (messages.length) { render(); connect(); } else document.getElementById('feed').innerHTML = '<div class="hint">Could not reach the relay. Check your connection and pull to retry.</div>'; });
   }
   function connect(){
     if (es) { es.close(); es = null; }
@@ -233,6 +240,7 @@
     seen[m.id] = 1; messages.push(m); lastId = m.id;
     if (m.topic === cfg.inTopic) { var r = /^\s*rate:\s*([0-9a-z]+)\s+(up|down)/i.exec(m.message || ''); if (r) { ratings[r[1]] = r[2].toLowerCase(); saveJSON(RATE, ratings); } }
     if (m.topic === cfg.outTopic && m.time * 1000 >= thinkingUntil - 90000) thinkingUntil = 0;
+    if (live) saveCache();
     return true;
   }
 
@@ -348,9 +356,9 @@
     var title = m.title || 'Pause', body = m.message || '', lines = body.split('\n'), rows = '';
     var cid = cardId(m), rated = cid ? ratings[cid] : null;
     lines.forEach(function(ln){
-      var mm = /^(READ|STANCE|DRAFT|DON[’']T|REACH|TODAY|VERDICT|WHY|BETTER|LEARNED|OPENED|COUNT|HER BRICKS|YOUR TELLS|LOG)\s+(.*)$/.exec(ln);
+      var mm = /^(READ|STANCE|DRAFT ES|DRAFT|DON[’']T|REACH|TODAY|VERDICT|WHY|BETTER|LEARNED|OPENED|COUNT|HER BRICKS|YOUR TELLS|LOG)\s+(.*)$/.exec(ln);
       if (mm) {
-        var k = mm[1], v = mm[2], cls = k === 'STANCE' || k === 'VERDICT' ? 'stance' : (k === 'DRAFT' || k === 'BETTER') ? 'draft' : '';
+        var k = mm[1], v = mm[2], cls = k === 'STANCE' || k === 'VERDICT' ? 'stance' : (k === 'DRAFT' || k === 'BETTER' || k === 'DRAFT ES') ? 'draft' : '';
         if (cls === 'draft') { var q = v.replace(/^[“"]|[”"]$/g, ''); rows += '<div class="row draft"><div class="k">'+k+'</div><div class="v">'+esc(q)+'<button class="copy" data-copy="'+esc(q)+'">Copy</button></div></div>'; }
         else rows += '<div class="row '+cls+'"><div class="k">'+k+'</div><div class="v">'+esc(v)+'</div></div>';
       } else if (ln.trim()) rows += '<div class="plain">'+esc(ln)+'</div>';
