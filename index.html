@@ -32,6 +32,7 @@
   header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
   header h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.2px}
   header .with{color:var(--muted);font-size:14px}
+  header .relsel{appearance:none;-webkit-appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:4px 26px 4px 10px;font-family:inherit;font-size:14px;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 14px) 55%,calc(100% - 9px) 55%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;max-width:50vw;text-overflow:ellipsis}
   header .spacer{flex:1}
   .dot{width:9px;height:9px;border-radius:50%;background:#B0B7C3}
   .dot.on{background:var(--ok)}
@@ -111,23 +112,44 @@
 <div id="app"></div>
 <script>
 (function(){
-  var LS = 'pause.cfg', SEEN = 'pause.seen', RATE = 'pause.ratings';
-  var cfg = loadCfg(), app = document.getElementById('app');
+  var LS = 'pause.cfg', RELS = 'pause.rels', ACTIVE = 'pause.active', RATE = 'pause.ratings';
+  // One install, several people: `rels` is the list of relationships on this device, `cfg` the active one.
+  var rels = loadRels(), cfg = pickActive(), app = document.getElementById('app');
   var seen = {}, ratings = loadJSON(RATE, {}), lastId = null, es = null, thinkingUntil = 0, messages = [];
 
   function loadJSON(k, d){ try{ return JSON.parse(localStorage.getItem(k)) || d; }catch(e){ return d; } }
   function saveJSON(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
-  function loadCfg(){
-    var c = loadJSON(LS, null);
-    var h = location.hash.replace(/^#/, '');
-    if (h) {
-      var p = {}; h.split('&').forEach(function(kv){ var i = kv.indexOf('='); if (i > 0) p[decodeURIComponent(kv.slice(0,i))] = decodeURIComponent(kv.slice(i+1)); });
-      // keep the hash in the address: iOS copies the page URL when adding to the Home Screen, and the
-      // installed app gets its own storage, so the codes must ride along in the link itself
-      if (p['in'] && p['out']) { var prev = c || {}; c = { server: p.server || 'https://ntfy.sh', inTopic: p['in'], outTopic: p['out'], name: p.name || 'them', mode: p.mode || prev.mode || '', setupDone: prev.inTopic === p['in'] ? !!prev.setupDone : false }; saveJSON(LS, c); }
-    }
-    return c;
+  function parseHash(h){ var p = {}; (h || '').replace(/^#/, '').split('&').forEach(function(kv){ var i = kv.indexOf('='); if (i > 0) p[decodeURIComponent(kv.slice(0,i))] = decodeURIComponent(kv.slice(i+1)); }); return p; }
+  function upsertRel(p){
+    if (!p['in'] || !p['out']) return null;
+    var i = -1; rels.forEach(function(r, k){ if (r.inTopic === p['in']) i = k; });
+    var base = i >= 0 ? rels[i] : {};
+    var rel = Object.assign({}, base, { server: p.server || base.server || 'https://ntfy.sh', inTopic: p['in'], outTopic: p['out'], name: p.name || base.name || 'them', mode: p.mode || base.mode || '' });
+    if (i >= 0) rels[i] = rel; else rels.push(rel);
+    saveJSON(RELS, rels); try { localStorage.setItem(ACTIVE, rel.inTopic); } catch (e) {}
+    return rel;
   }
+  function loadRels(){
+    var list = loadJSON(RELS, null);
+    if (!list) { var old = loadJSON(LS, null); list = old && old.inTopic ? [old] : []; }
+    rels = list;
+    // keep the hash in the address: iOS copies the page URL when adding to the Home Screen, and the
+    // installed app gets its own storage, so the codes must ride along in the link itself
+    upsertRel(parseHash(location.hash));
+    return rels;
+  }
+  function pickActive(){ var a = null; try { a = localStorage.getItem(ACTIVE); } catch (e) {} var hit = null; rels.forEach(function(r){ if (r.inTopic === a) hit = r; }); return hit || rels[0] || null; }
+  function saveRels(){ saveJSON(RELS, rels); try { if (cfg) localStorage.setItem(ACTIVE, cfg.inTopic); } catch (e) {} }
+  function switchRel(inTopic){
+    var r = null; rels.forEach(function(x){ if (x.inTopic === inTopic) r = x; });
+    if (!r || r === cfg) return;
+    cfg = r; saveRels();
+    if (es) { es.close(); es = null; }
+    messages = []; seen = {}; lastId = null; thinkingUntil = 0; pendingFile = null;
+    renderShell(); loadHistory(); swReady().then(resyncPush).catch(function(){});
+  }
+  window.addEventListener('hashchange', function(){ var r = upsertRel(parseHash(location.hash)); if (r) { if (r === cfg) renderShell(); switchRel(r.inTopic); } });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', function(ev){ var d = ev.data || {}; if (d.type === 'open' && d.url) { var i = d.url.indexOf('#'); if (i >= 0) { var r = upsertRel(parseHash(d.url.slice(i))); if (r) switchRel(r.inTopic); } } });
 
   // ---------- setup screen ----------
   function renderSetup(){
@@ -139,7 +161,7 @@
     document.getElementById('s-go').onclick = function(){
       var o = val('s-out'), i = val('s-in'), n = val('s-name') || 'them';
       if (!o || !i) return alert('Both codes are needed.');
-      cfg = { server: 'https://ntfy.sh', inTopic: i, outTopic: o, name: n }; saveJSON(LS, cfg); boot();
+      cfg = upsertRel({ 'in': i, 'out': o, name: n }); saveRels(); boot();
     };
   }
   function val(id){ return (document.getElementById(id).value || '').trim(); }
@@ -147,17 +169,18 @@
   // ---------- main screen ----------
   function renderShell(){
     app.innerHTML =
-      '<header><h1>Pause</h1><span class="with">with '+esc(cfg.name)+'</span><span class="spacer"></span><span class="dot" id="dot"></span><button class="gear" id="bell" aria-label="Notifications">&#128277;</button><button class="gear" id="gear" aria-label="Settings">&#9881;</button></header>'+
+      '<header><h1>Pause</h1>'+headerWith()+'<span class="spacer"></span><span class="dot" id="dot"></span><button class="gear" id="bell" aria-label="Notifications">&#128277;</button><button class="gear" id="gear" aria-label="Settings">&#9881;</button></header>'+
       '<section id="setup"></section>'+
       '<main id="feed"><div class="hint">Loading the last few days…</div></main>'+
       '<footer><div class="modes" id="modes">'+
         '<button data-m="" class="sel">Auto</button><button data-m="ask: ">Ask</button><button data-m="draft: ">Check a draft</button><button data-m="teach: ">Teach</button>'+
       '</div><div class="chipwrap" id="chip"></div><div class="compose"><button class="attach" id="attach" aria-label="Attach an image">&#128206;</button><input type="file" id="file" accept="image/*" hidden><textarea id="box" rows="1" placeholder="Ask, paste a draft, or tell Pause something"></textarea><button class="send" id="send" disabled aria-label="Send">&#8593;</button></div></footer>'+
-      '<div class="sheet" id="sheet"><div class="inner"><strong>This phone</strong>'+
+      '<div class="sheet" id="sheet"><div class="inner"><strong>Pause with '+esc(cfg.name)+'</strong>'+
         '<div>Cards arrive on <code>'+esc(cfg.outTopic)+'</code></div><div>Pause listens on <code>'+esc(cfg.inTopic)+'</code></div>'+
         '<div style="color:var(--muted);font-size:13px">Keep the codes private: anyone who knew them could read your cards.</div>'+
         '<button id="showsetup">Show setup</button><button id="export">Export for my companion</button><button id="pasteprofile">Paste a profile from my companion</button>'+
-        '<button id="reload">Reload history</button><button id="forget">Forget codes on this phone</button><button id="close">Close</button></div></div>'+
+        '<button id="addperson">Add another person</button>'+(rels.length > 1 ? '<button id="removeperson">Remove '+esc(cfg.name)+' from this device</button>' : '')+
+        '<button id="reload">Reload history</button><button id="forget">Forget everyone on this device</button><button id="close">Close</button></div></div>'+
       '<div class="sheet" id="sheet2"><div class="inner"><strong id="s2-title"></strong><div id="s2-note" style="color:var(--muted);font-size:13px"></div><textarea id="s2-text"></textarea><button id="s2-go" class="primary"></button><button id="s2-close">Close</button></div></div>';
     var box = document.getElementById('box'), send = document.getElementById('send');
     box.addEventListener('input', function(){ box.style.height = 'auto'; box.style.height = Math.min(box.scrollHeight, 140) + 'px'; send.disabled = !box.value.trim() && !pendingFile; });
@@ -175,8 +198,13 @@
     updateBell();
     document.getElementById('close').onclick = function(){ document.getElementById('sheet').classList.remove('open'); };
     document.getElementById('reload').onclick = function(){ document.getElementById('sheet').classList.remove('open'); messages = []; seen = {}; lastId = null; loadHistory(); };
-    document.getElementById('forget').onclick = function(){ if (confirm('Forget the codes on this phone?')) { localStorage.removeItem(LS); location.reload(); } };
-    document.getElementById('showsetup').onclick = function(){ cfg.setupDone = false; saveJSON(LS, cfg); document.getElementById('sheet').classList.remove('open'); renderSetup(); };
+    document.getElementById('forget').onclick = function(){ if (confirm('Forget everyone on this device?')) { try { localStorage.removeItem(LS); localStorage.removeItem(RELS); localStorage.removeItem(ACTIVE); } catch (e) {} location.hash = ''; location.reload(); } };
+    document.getElementById('showsetup').onclick = function(){ cfg.setupDone = false; saveRels(); document.getElementById('sheet').classList.remove('open'); renderSetup(); };
+    document.getElementById('addperson').onclick = function(){ document.getElementById('sheet').classList.remove('open'); addPersonSheet(); };
+    var rm = document.getElementById('removeperson');
+    if (rm) rm.onclick = function(){ if (!confirm('Remove ' + cfg.name + ' from this device? Nothing on the server changes.')) return; rels = rels.filter(function(r){ return r !== cfg; }); cfg = rels[0]; saveRels(); document.getElementById('sheet').classList.remove('open'); if (es) { es.close(); es = null; } messages = []; seen = {}; lastId = null; renderShell(); loadHistory(); };
+    var sel = document.getElementById('relsel');
+    if (sel) sel.onchange = function(){ switchRel(this.value); };
     document.getElementById('export').onclick = function(){ document.getElementById('sheet').classList.remove('open'); openExport(); };
     document.getElementById('pasteprofile').onclick = function(){ document.getElementById('sheet').classList.remove('open'); openPasteProfile(); };
     document.getElementById('s2-close').onclick = function(){ document.getElementById('sheet2').classList.remove('open'); };
@@ -269,8 +297,8 @@
     if (act === 'push') enablePush();
     else if (act === 'start') { post('start').then(function(m){ seen[m.id] = 1; thinkingUntil = Date.now() + 60000; render(); }).catch(function(err){ alert('Could not send: ' + err.message); }); }
     else if (act === 'paste') openPasteProfile();
-    else if (act === 'macmode') { cfg.mode = 'mac'; saveJSON(LS, cfg); renderSetup(); }
-    else if (act === 'hidesetup') { cfg.setupDone = true; saveJSON(LS, cfg); renderSetup(); }
+    else if (act === 'macmode') { cfg.mode = 'mac'; saveRels(); renderSetup(); }
+    else if (act === 'hidesetup') { cfg.setupDone = true; saveRels(); renderSetup(); }
   });
   function sheet2(title, note, text, button, onGo){
     document.getElementById('s2-title').textContent = title; document.getElementById('s2-note').textContent = note;
@@ -296,7 +324,7 @@
   function openPasteProfile(){
     sheet2('Paste a profile from my companion', 'Ask your companion AI to write the profile described in the Pause Companion guide, then paste it here. It replaces what Pause knows about the two of you; your lessons stay.', '', 'Send to Pause', function(v){
       v = (v || '').trim(); if (v.length < 200) return alert('That looks too short for a profile. Paste the whole thing.');
-      post('profile: ' + v).then(function(m){ seen[m.id] = 1; cfg.profileSent = true; saveJSON(LS, cfg); document.getElementById('sheet2').classList.remove('open'); thinkingUntil = Date.now() + 30000; render(); }).catch(function(err){ alert('Could not send: ' + err.message); });
+      post('profile: ' + v).then(function(m){ seen[m.id] = 1; cfg.profileSent = true; saveRels(); document.getElementById('sheet2').classList.remove('open'); thinkingUntil = Date.now() + 30000; render(); }).catch(function(err){ alert('Could not send: ' + err.message); });
     });
   }
   function renderMine(m){
@@ -344,9 +372,23 @@
   });
 
   // ---------- actions ----------
-  function post(message){
-    return fetch(cfg.server, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ topic: cfg.inTopic, message: message }) })
+  function postTo(rel, message){
+    return fetch(rel.server, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ topic: rel.inTopic, message: message }) })
       .then(function(r){ if (!r.ok) throw new Error('relay ' + r.status); return r.json(); });
+  }
+  function post(message){ return postTo(cfg, message); }
+  function postAll(message){ return Promise.all(rels.map(function(r){ return postTo(r, message).catch(function(){ return null; }); })); }
+  function headerWith(){
+    if (rels.length < 2) return '<span class="with">with '+esc(cfg.name)+'</span>';
+    var o = rels.map(function(r){ return '<option value="'+esc(r.inTopic)+'"'+(r === cfg ? ' selected' : '')+'>with '+esc(r.name)+'</option>'; }).join('');
+    return '<select class="relsel" id="relsel" aria-label="Choose a person">'+o+'</select>';
+  }
+  function addPersonSheet(){
+    sheet2('Add another person', 'Paste that person’s Pause link (from the Mac: python3 pause.py --list-rels), or their two codes as in=…&out=…&name=…. Each person has their own memory; nothing crosses over.', '', 'Add', function(v){
+      v = (v || '').trim(); var i = v.indexOf('#'); var p = parseHash(i >= 0 ? v.slice(i) : v);
+      if (!p['in'] || !p['out']) return alert('That does not look like a Pause link. It needs in= and out= codes.');
+      var r = upsertRel(p); document.getElementById('sheet2').classList.remove('open'); switchRel(r.inTopic); if (r === cfg) { renderShell(); loadHistory(); }
+    });
   }
   var pendingFile = null;
   function showChip(f){
@@ -393,7 +435,7 @@
       return swReady().then(function(reg){
         return reg.pushManager.getSubscription().then(function(s){ return s || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID) }); });
       }).then(function(sub){
-        return post('subscribe: ' + JSON.stringify(sub.toJSON())).then(function(m){ seen[m.id] = 1; try { localStorage.setItem(PUSHED, sub.endpoint); } catch (e) {} updateBell(); });
+        return postAll('subscribe: ' + JSON.stringify(sub.toJSON())).then(function(ms){ ms.forEach(function(m){ if (m && m.id) seen[m.id] = 1; }); try { localStorage.setItem(PUSHED, sub.endpoint); } catch (e) {} updateBell(); });
       });
     }).catch(function(err){ alert('Could not turn on notifications: ' + err.message); });
   }
@@ -401,7 +443,7 @@
     if (!('PushManager' in window) || !('Notification' in window) || Notification.permission !== 'granted') return;
     swReady().then(function(reg){ return reg.pushManager.getSubscription(); }).then(function(sub){
       var had = null; try { had = localStorage.getItem(PUSHED); } catch (e) {}
-      if (sub && had !== sub.endpoint) return post('subscribe: ' + JSON.stringify(sub.toJSON())).then(function(m){ seen[m.id] = 1; try { localStorage.setItem(PUSHED, sub.endpoint); } catch (e) {} updateBell(); });
+      if (sub && had !== sub.endpoint) return postAll('subscribe: ' + JSON.stringify(sub.toJSON())).then(function(ms){ ms.forEach(function(m){ if (m && m.id) seen[m.id] = 1; }); try { localStorage.setItem(PUSHED, sub.endpoint); } catch (e) {} updateBell(); });
     }).catch(function(){});
   }
 

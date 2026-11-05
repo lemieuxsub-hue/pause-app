@@ -13,8 +13,11 @@ self.addEventListener('push', function (e) {
 
 self.addEventListener('notificationclick', function (e) {
   e.notification.close();
+  var url = (e.notification.data && e.notification.data.url) || './';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) {
-    for (var i = 0; i < cs.length; i++) { if ('focus' in cs[i]) return cs[i].focus(); }
-    return self.clients.openWindow('./');
+    for (var i = 0; i < cs.length; i++) {
+      if ('focus' in cs[i]) { cs[i].postMessage({ type: 'open', url: url }); return cs[i].focus(); }  // the page switches to that person
+    }
+    return self.clients.openWindow(url);
   }));
 });
