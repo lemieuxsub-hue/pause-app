@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pause</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pause">
+<meta name="theme-color" content="#1F2A37">
+<meta name="description" content="A pause button for texting one person.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<style>
+  :root{
+    --bg:#FBF8F3; --panel:#FFFFFF; --ink:#1F2A37; --muted:#6B7280; --line:#E6E1D8;
+    --accent:#C8553D; --teal:#2F6F6A; --me:#1F2A37; --me-ink:#F3EEE6; --card:#F1ECE3;
+    --ok:#2F6F6A; --warn:#C8553D; --chip:#E7F0EF;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#141A22; --panel:#1C242E; --ink:#F3EEE6; --muted:#9AA4B2; --line:#2A3542;
+      --me:#F3EEE6; --me-ink:#1F2A37; --card:#232D39; --chip:#1F3634;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif;-webkit-text-size-adjust:100%}
+  #app{display:flex;flex-direction:column;height:100%;height:100dvh}
+  header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  header h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.2px}
+  header .with{color:var(--muted);font-size:14px}
+  header .spacer{flex:1}
+  .dot{width:9px;height:9px;border-radius:50%;background:#B0B7C3}
+  .dot.on{background:var(--ok)}
+  .gear{background:none;border:0;color:var(--muted);font-size:20px;padding:4px 6px}
+  main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 8px;display:flex;flex-direction:column;gap:10px}
+  .day{align-self:center;color:var(--muted);font-size:12px;margin:8px 0 2px;text-transform:uppercase;letter-spacing:1px}
+  .msg{max-width:92%;display:flex;flex-direction:column;gap:4px}
+  .msg.me{align-self:flex-end;align-items:flex-end}
+  .msg.them{align-self:flex-start}
+  .bubble{padding:10px 14px;border-radius:18px;white-space:pre-wrap;word-wrap:break-word}
+  .me .bubble{background:var(--me);color:var(--me-ink);border-bottom-right-radius:6px}
+  .them .bubble{background:var(--chip);color:var(--ink);border-bottom-left-radius:6px}
+  .meta{font-size:12px;color:var(--muted);padding:0 6px}
+  .card{align-self:stretch;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px 14px 10px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .card .title{font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.3px;display:flex;justify-content:space-between;align-items:baseline}
+  .card .title time{color:var(--muted);font-weight:500}
+  .row{display:flex;gap:10px;margin-top:8px;align-items:flex-start}
+  .row .k{flex:0 0 64px;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted);padding-top:3px}
+  .row .v{flex:1;white-space:pre-wrap}
+  .row.stance .v{font-weight:600}
+  .row.draft .v{background:var(--card);border-radius:10px;padding:8px 10px;font-style:italic}
+  .row.draft .v .copy{display:block;font-style:normal;font-size:12px;color:var(--teal);margin-top:6px;background:none;border:0;padding:0;font-weight:600}
+  .plain{white-space:pre-wrap;margin-top:6px}
+  .acts{display:flex;gap:8px;margin-top:10px;align-items:center}
+  .acts button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:15px}
+  .acts button.sel{background:var(--chip);border-color:var(--teal)}
+  .acts .reply{margin-left:auto;font-size:13px;color:var(--teal);font-weight:600;border-color:transparent}
+  .thinking{align-self:flex-start;color:var(--muted);font-size:13px;padding:4px 8px}
+  footer{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:8px 12px calc(env(safe-area-inset-bottom) + 8px)}
+  .modes{display:flex;gap:6px;margin-bottom:8px}
+  .modes button{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:4px 10px;font-size:12px}
+  .modes button.sel{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .compose{display:flex;gap:8px;align-items:flex-end}
+  textarea{flex:1;resize:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:18px;padding:10px 14px;font:16px/1.35 inherit;max-height:140px;min-height:42px}
+  .send{border:0;background:var(--accent);color:#fff;border-radius:50%;width:42px;height:42px;font-size:18px;flex:0 0 42px}
+  .send:disabled{opacity:.4}
+  .setup{padding:24px 20px;display:flex;flex-direction:column;gap:14px;max-width:420px;margin:auto}
+  .setup h2{margin:0}
+  .setup input{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font:16px inherit}
+  .setup button{padding:12px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:600 16px inherit}
+  .setup p{color:var(--muted);margin:0}
+  .hint{text-align:center;color:var(--muted);font-size:13px;padding:24px 12px}
+  .sheet{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:flex-end;z-index:20}
+  .sheet.open{display:flex}
+  .sheet .inner{background:var(--panel);width:100%;border-radius:18px 18px 0 0;padding:18px 18px calc(env(safe-area-inset-bottom) + 18px);display:flex;flex-direction:column;gap:10px}
+  .sheet code{font-size:13px;background:var(--card);padding:2px 6px;border-radius:6px}
+  .sheet button{padding:10px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--ink);font:15px inherit}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+  var LS = 'pause.cfg', SEEN = 'pause.seen', RATE = 'pause.ratings';
+  var cfg = loadCfg(), app = document.getElementById('app');
+  var seen = {}, ratings = loadJSON(RATE, {}), lastId = null, es = null, thinkingUntil = 0, messages = [];
+
+  function loadJSON(k, d){ try{ return JSON.parse(localStorage.getItem(k)) || d; }catch(e){ return d; } }
+  function saveJSON(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  function loadCfg(){
+    var c = loadJSON(LS, null);
+    var h = location.hash.replace(/^#/, '');
+    if (h) {
+      var p = {}; h.split('&').forEach(function(kv){ var i = kv.indexOf('='); if (i > 0) p[decodeURIComponent(kv.slice(0,i))] = decodeURIComponent(kv.slice(i+1)); });
+      if (p['in'] && p['out']) { c = { server: p.server || 'https://ntfy.sh', inTopic: p['in'], outTopic: p['out'], name: p.name || 'them' }; saveJSON(LS, c); history.replaceState(null, '', location.pathname); }
+    }
+    return c;
+  }
+
+  // ---------- setup screen ----------
+  function renderSetup(){
+    app.innerHTML = '<div class="setup"><h2>Pause</h2><p>Enter the two channel codes from your welcome note. They stay on this phone.</p>'+
+      '<input id="s-out" placeholder="Cards arrive on (e.g. pause-xxxx-1a2b3c4d)" autocapitalize="off" autocorrect="off">'+
+      '<input id="s-in" placeholder="Pause listens on (e.g. pause-xxxx-in-5e6f7a8b)" autocapitalize="off" autocorrect="off">'+
+      '<input id="s-name" placeholder="Their first name">'+
+      '<button id="s-go">Open Pause</button></div>';
+    document.getElementById('s-go').onclick = function(){
+      var o = val('s-out'), i = val('s-in'), n = val('s-name') || 'them';
+      if (!o || !i) return alert('Both codes are needed.');
+      cfg = { server: 'https://ntfy.sh', inTopic: i, outTopic: o, name: n }; saveJSON(LS, cfg); boot();
+    };
+  }
+  function val(id){ return (document.getElementById(id).value || '').trim(); }
+
+  // ---------- main screen ----------
+  function renderShell(){
+    app.innerHTML =
+      '<header><h1>Pause</h1><span class="with">with '+esc(cfg.name)+'</span><span class="spacer"></span><span class="dot" id="dot"></span><button class="gear" id="gear" aria-label="Settings">&#9881;</button></header>'+
+      '<main id="feed"><div class="hint">Loading the last few days…</div></main>'+
+      '<footer><div class="modes" id="modes">'+
+        '<button data-m="" class="sel">Auto</button><button data-m="ask: ">Ask</button><button data-m="draft: ">Check a draft</button><button data-m="teach: ">Teach</button>'+
+      '</div><div class="compose"><textarea id="box" rows="1" placeholder="Ask, paste a draft, or tell Pause something"></textarea><button class="send" id="send" disabled aria-label="Send">&#8593;</button></div></footer>'+
+      '<div class="sheet" id="sheet"><div class="inner"><strong>This phone</strong>'+
+        '<div>Cards arrive on <code>'+esc(cfg.outTopic)+'</code></div><div>Pause listens on <code>'+esc(cfg.inTopic)+'</code></div>'+
+        '<div style="color:var(--muted);font-size:13px">Notifications come through the ntfy app on these channels. Keep the codes private.</div>'+
+        '<button id="reload">Reload history</button><button id="forget">Forget codes on this phone</button><button id="close">Close</button></div></div>';
+    var box = document.getElementById('box'), send = document.getElementById('send');
+    box.addEventListener('input', function(){ box.style.height = 'auto'; box.style.height = Math.min(box.scrollHeight, 140) + 'px'; send.disabled = !box.value.trim(); });
+    send.onclick = function(){ submit(box.value); box.value = ''; box.style.height = 'auto'; send.disabled = true; };
+    document.getElementById('modes').onclick = function(e){ var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function(x){ x.classList.remove('sel'); }); b.classList.add('sel'); };
+    document.getElementById('gear').onclick = function(){ document.getElementById('sheet').classList.add('open'); };
+    document.getElementById('close').onclick = function(){ document.getElementById('sheet').classList.remove('open'); };
+    document.getElementById('reload').onclick = function(){ document.getElementById('sheet').classList.remove('open'); messages = []; seen = {}; lastId = null; loadHistory(); };
+    document.getElementById('forget').onclick = function(){ if (confirm('Forget the codes on this phone?')) { localStorage.removeItem(LS); location.reload(); } };
+  }
+  function mode(){ var s = document.querySelector('#modes .sel'); return s ? s.getAttribute('data-m') : ''; }
+
+  // ---------- data ----------
+  function topicsPath(){ return cfg.server + '/' + encodeURIComponent(cfg.outTopic) + ',' + encodeURIComponent(cfg.inTopic); }
+  function loadHistory(){
+    fetch(topicsPath() + '/json?poll=1&since=72h').then(function(r){ return r.text(); }).then(function(t){
+      t.split('\n').forEach(function(line){ if (!line.trim()) return; try{ var m = JSON.parse(line); if (m.event === 'message') add(m, false); }catch(e){} });
+      render(); connect();
+    }).catch(function(){ document.getElementById('feed').innerHTML = '<div class="hint">Could not reach the relay. Check your connection and pull to retry.</div>'; });
+  }
+  function connect(){
+    if (es) { es.close(); es = null; }
+    var url = topicsPath() + '/sse' + (lastId ? '?since=' + encodeURIComponent(lastId) : '?since=10s');
+    es = new EventSource(url);
+    es.onopen = function(){ setDot(true); };
+    es.onerror = function(){ setDot(false); };
+    es.onmessage = function(ev){ try{ var m = JSON.parse(ev.data); if (m.event === 'message') { if (add(m, true)) render(); } }catch(e){} };
+  }
+  function setDot(on){ var d = document.getElementById('dot'); if (d) d.className = 'dot' + (on ? ' on' : ''); }
+  function add(m, live){
+    if (seen[m.id]) return false;
+    seen[m.id] = 1; messages.push(m); lastId = m.id;
+    if (m.topic === cfg.inTopic) { var r = /^\s*rate:\s*([0-9a-z]+)\s+(up|down)/i.exec(m.message || ''); if (r) { ratings[r[1]] = r[2].toLowerCase(); saveJSON(RATE, ratings); } }
+    if (m.topic === cfg.outTopic && m.time * 1000 >= thinkingUntil - 90000) thinkingUntil = 0;
+    return true;
+  }
+
+  // ---------- render ----------
+  function render(){
+    var feed = document.getElementById('feed'); if (!feed) return;
+    var atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+    messages.sort(function(a,b){ return a.time - b.time; });
+    var html = '', lastDay = '';
+    messages.forEach(function(m){
+      var d = dayLabel(m.time); if (d !== lastDay) { html += '<div class="day">'+d+'</div>'; lastDay = d; }
+      html += m.topic === cfg.inTopic ? renderMine(m) : renderCard(m);
+    });
+    if (!messages.length) html = '<div class="hint">Nothing yet. Cards arrive here about a minute after '+esc(cfg.name)+' texts. Ask something below to start.</div>';
+    if (thinkingUntil > Date.now()) html += '<div class="thinking">Pause is thinking…</div>';
+    feed.innerHTML = html;
+    if (atBottom || true) feed.scrollTop = feed.scrollHeight;
+  }
+  function renderMine(m){
+    var t = m.message || '';
+    if (/^\s*rate:/i.test(t)) return '';
+    var label = '', body = t, pre = /^\s*(ask|draft|teach|note|remember|sent|in):\s*/i.exec(t);
+    if (pre) { label = pre[1].toLowerCase(); body = t.slice(pre[0].length); }
+    if (label === 'in') return '<div class="msg them"><div class="bubble">'+esc(body)+'</div><div class="meta">'+esc(cfg.name)+' · '+tm(m.time)+'</div></div>';
+    var tag = { ask:'question', draft:'draft check', teach:'teaching Pause', note:'note', remember:'teaching Pause', sent:'what you sent' }[label] || '';
+    return '<div class="msg me"><div class="bubble">'+esc(body)+'</div><div class="meta">'+(tag ? tag + ' · ' : '')+tm(m.time)+'</div></div>';
+  }
+  function renderCard(m){
+    var title = m.title || 'Pause', body = m.message || '', lines = body.split('\n'), rows = '';
+    var cid = cardId(m), rated = cid ? ratings[cid] : null;
+    lines.forEach(function(ln){
+      var mm = /^(READ|STANCE|DRAFT|DON[’']T|REACH|TODAY|VERDICT|WHY|BETTER|LEARNED|OPENED|COUNT|HER BRICKS|YOUR TELLS|LOG)\s+(.*)$/.exec(ln);
+      if (mm) {
+        var k = mm[1], v = mm[2], cls = k === 'STANCE' || k === 'VERDICT' ? 'stance' : (k === 'DRAFT' || k === 'BETTER') ? 'draft' : '';
+        if (cls === 'draft') { var q = v.replace(/^[“"]|[”"]$/g, ''); rows += '<div class="row draft"><div class="k">'+k+'</div><div class="v">'+esc(q)+'<button class="copy" data-copy="'+esc(q)+'">Copy</button></div></div>'; }
+        else rows += '<div class="row '+cls+'"><div class="k">'+k+'</div><div class="v">'+esc(v)+'</div></div>';
+      } else if (ln.trim()) rows += '<div class="plain">'+esc(ln)+'</div>';
+    });
+    var acts = '';
+    if (cid) acts = '<div class="acts"><button data-rate="up" data-cid="'+cid+'" class="'+(rated==='up'?'sel':'')+'">&#128077;</button><button data-rate="down" data-cid="'+cid+'" class="'+(rated==='down'?'sel':'')+'">&#128078;</button><button class="reply" data-reply="1">Reply</button></div>';
+    return '<div class="card"><div class="title"><span>'+esc(title)+'</span><time>'+tm(m.time)+'</time></div>'+rows+acts+'</div>';
+  }
+  function cardId(m){
+    if (!m.actions) return null;
+    for (var i = 0; i < m.actions.length; i++) { var a = m.actions[i]; if (a.action === 'http' && a.body) { var r = /rate:\s*([0-9a-z]+)/i.exec(a.body); if (r) return r[1]; } }
+    return null;
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.hasAttribute('data-rate')) { rate(b.getAttribute('data-cid'), b.getAttribute('data-rate')); }
+    else if (b.hasAttribute('data-copy')) { copy(b.getAttribute('data-copy')); b.textContent = 'Copied'; setTimeout(function(){ b.textContent = 'Copy'; }, 1500); }
+    else if (b.hasAttribute('data-reply')) { var box = document.getElementById('box'); box.focus(); }
+  });
+
+  // ---------- actions ----------
+  function post(message){
+    return fetch(cfg.server, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ topic: cfg.inTopic, message: message }) })
+      .then(function(r){ if (!r.ok) throw new Error('relay ' + r.status); return r.json(); });
+  }
+  function submit(text){
+    text = (text || '').trim(); if (!text) return;
+    var msg = mode() + text;
+    thinkingUntil = Date.now() + 90000;
+    post(msg).then(function(m){ m.topic = cfg.inTopic; if (add(m, true)) render(); else render(); setTimeout(render, 91000); })
+      .catch(function(err){ thinkingUntil = 0; render(); alert('Could not send: ' + err.message); });
+  }
+  function rate(cid, v){
+    ratings[cid] = v; saveJSON(RATE, ratings); render();
+    post('rate: ' + cid + ' ' + v).then(function(m){ m.topic = cfg.inTopic; seen[m.id] = 1; }).catch(function(){});
+  }
+  function copy(t){ if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t); else { var ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); } }
+
+  // ---------- utils ----------
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function tm(t){ var d = new Date(t * 1000); return d.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }); }
+  function dayLabel(t){ var d = new Date(t * 1000), n = new Date(); var same = function(a,b){ return a.toDateString() === b.toDateString(); };
+    if (same(d, n)) return 'Today'; var y = new Date(n); y.setDate(n.getDate() - 1); if (same(d, y)) return 'Yesterday';
+    return d.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }); }
+
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible' && cfg) { fetch(topicsPath() + '/json?poll=1&since=' + encodeURIComponent(lastId || '1h')).then(function(r){ return r.text(); }).then(function(t){ var n = false; t.split('\n').forEach(function(line){ if (!line.trim()) return; try{ var m = JSON.parse(line); if (m.event === 'message' && add(m, true)) n = true; }catch(e){} }); if (n) render(); connect(); }).catch(function(){ connect(); }); } });
+
+  function boot(){ if (!cfg) return renderSetup(); renderShell(); loadHistory(); }
+  boot();
+})();
+</script>
+</body>
+</html>
