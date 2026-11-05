@@ -90,6 +90,8 @@
   .sheet button{padding:10px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--ink);font-family:inherit;font-size:15px}
   .sheet textarea{width:100%;min-height:140px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);padding:10px;font-family:inherit;font-size:14px;resize:vertical}
   .sheet .primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+  #status:empty{display:none}
+  .banner{background:var(--card);color:var(--ink);border-bottom:1px solid var(--line);padding:10px 16px;font-size:14px;line-height:1.35}
   #setup{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px 4px;max-height:48vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
   #setup:empty{display:none}
   .setup-h{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
@@ -170,7 +172,7 @@
   function renderShell(){
     app.innerHTML =
       '<header><h1>Pause</h1>'+headerWith()+'<span class="spacer"></span><span class="dot" id="dot"></span><button class="gear" id="bell" aria-label="Notifications">&#128277;</button><button class="gear" id="gear" aria-label="Settings">&#9881;</button></header>'+
-      '<section id="setup"></section>'+
+      '<section id="status"></section><section id="setup"></section>'+
       '<main id="feed"><div class="hint">Loading the last few days…</div></main>'+
       '<footer><div class="modes" id="modes">'+
         '<button data-m="" class="sel">Auto</button><button data-m="ask: ">Ask</button><button data-m="draft: ">Check a draft</button><button data-m="teach: ">Teach</button><button data-quick="ask: What is my best next move with them right now? Reply, wait, or nothing, and if reply, what." style="margin-left:auto;border-color:var(--teal);color:var(--teal)">Best next move?</button>'+
@@ -235,8 +237,22 @@
     es.onmessage = function(ev){ try{ var m = JSON.parse(ev.data); if (m.event === 'message') { if (add(m, true)) render(); } }catch(e){} };
   }
   function setDot(on){ var d = document.getElementById('dot'); if (d) d.className = 'dot' + (on ? ' on' : ''); }
+  function renderStatus(){
+    var el = document.getElementById('status'); if (!el) return;
+    if (!lastHb) { try { lastHb = Number(localStorage.getItem('pause.hb.' + cfg.inTopic)) || 0; } catch (e) {} }
+    var age = lastHb ? (Date.now() / 1000 - lastHb) : null;
+    if (age === null) { el.innerHTML = ''; return; }
+    if (age < 330) { el.innerHTML = ''; return; }
+    var since = new Date(lastHb * 1000), today = since.toDateString() === new Date().toDateString();
+    var when = since.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + (today ? '' : ' on ' + since.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }));
+    el.innerHTML = '<div class="banner">Pause’s server hasn’t checked in since ' + esc(when) + '. It is probably asleep. Cards and answers resume when it is back; anything you send now waits for it.</div>';
+  }
+  setInterval(renderStatus, 60000);
+  var lastHb = 0;  // the server's latest heartbeat, so the app can say when the Mac is asleep
+  function isHeartbeat(m){ return (m.tags || []).indexOf('heartbeat') >= 0; }
   function add(m, live){
     if (seen[m.id]) return false;
+    if (isHeartbeat(m)) { seen[m.id] = 1; if (m.time > lastHb) { lastHb = m.time; try { localStorage.setItem('pause.hb.' + cfg.inTopic, String(lastHb)); } catch (e) {} } lastId = m.id; renderStatus(); return false; }
     seen[m.id] = 1; messages.push(m); lastId = m.id;
     if (m.topic === cfg.inTopic) { var r = /^\s*rate:\s*([0-9a-z]+)\s+(up|down)/i.exec(m.message || ''); if (r) { ratings[r[1]] = r[2].toLowerCase(); saveJSON(RATE, ratings); } }
     if (m.topic === cfg.outTopic && m.time * 1000 >= thinkingUntil - 90000) thinkingUntil = 0;
@@ -258,7 +274,7 @@
     if (thinkingUntil > Date.now()) html += '<div class="thinking">Pause is thinking…</div>';
     feed.innerHTML = html;
     if (atBottom || true) feed.scrollTop = feed.scrollHeight;
-    renderSetup();
+    renderSetup(); renderStatus();
   }
 
   // ---------- setup panel: detects its own progress ----------
