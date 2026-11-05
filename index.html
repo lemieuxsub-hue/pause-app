@@ -173,7 +173,7 @@
       '<section id="setup"></section>'+
       '<main id="feed"><div class="hint">Loading the last few days…</div></main>'+
       '<footer><div class="modes" id="modes">'+
-        '<button data-m="" class="sel">Auto</button><button data-m="ask: ">Ask</button><button data-m="draft: ">Check a draft</button><button data-m="teach: ">Teach</button>'+
+        '<button data-m="" class="sel">Auto</button><button data-m="ask: ">Ask</button><button data-m="draft: ">Check a draft</button><button data-m="teach: ">Teach</button><button data-quick="ask: What is my best next move with them right now? Reply, wait, or nothing, and if reply, what." style="margin-left:auto;border-color:var(--teal);color:var(--teal)">Best next move?</button>'+
       '</div><div class="chipwrap" id="chip"></div><div class="compose"><button class="attach" id="attach" aria-label="Attach an image">&#128206;</button><input type="file" id="file" accept="image/*" hidden><textarea id="box" rows="1" placeholder="Ask, paste a draft, or tell Pause something"></textarea><button class="send" id="send" disabled aria-label="Send">&#8593;</button></div></footer>'+
       '<div class="sheet" id="sheet"><div class="inner"><strong>Pause with '+esc(cfg.name)+'</strong>'+
         '<div>Cards arrive on <code>'+esc(cfg.outTopic)+'</code></div><div>Pause listens on <code>'+esc(cfg.inTopic)+'</code></div>'+
@@ -192,7 +192,7 @@
       if (f.size > 14 * 1024 * 1024) { alert('That image is over 14 MB. Try a screenshot or a smaller photo.'); return; }
       pendingFile = f; showChip(f); send.disabled = false;
     };
-    document.getElementById('modes').onclick = function(e){ var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function(x){ x.classList.remove('sel'); }); b.classList.add('sel'); };
+    document.getElementById('modes').onclick = function(e){ var b = e.target.closest('button'); if (!b) return; if (b.hasAttribute('data-quick')) { thinkingUntil = Date.now() + 90000; post(b.getAttribute('data-quick')).then(function(m){ m.topic = cfg.inTopic; add(m, true); render(); setTimeout(render, 91000); }).catch(function(err){ thinkingUntil = 0; render(); alert('Could not send: ' + err.message); }); return; } [].forEach.call(this.children, function(x){ if (!x.hasAttribute('data-quick')) x.classList.remove('sel'); }); b.classList.add('sel'); };
     document.getElementById('gear').onclick = function(){ document.getElementById('sheet').classList.add('open'); };
     document.getElementById('bell').onclick = enablePush;
     updateBell();
