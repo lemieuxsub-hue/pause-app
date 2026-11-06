@@ -532,7 +532,7 @@
 
   document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible' && cfg) { fetch(withAuth(topicsPath() + '/json?poll=1&since=' + encodeURIComponent(lastId || '1h'))).then(function(r){ return r.text(); }).then(function(t){ var n = false; t.split('\n').forEach(function(line){ if (!line.trim()) return; try{ var m = JSON.parse(line); if (m.event === 'message' && add(m, true)) n = true; }catch(e){} }); if (n) render(); connect(); }).catch(function(){ connect(); }); } });
 
-  function boot(){ if (!cfg) return renderCodes(); renderShell(); loadHistory(); swReady().then(resyncPush).catch(function(){}); if (!cfg.onboarded && !cfg.setupDone) startOnboarding(0); }
+  function boot(){ if (!cfg) return renderCodes(); renderShell(); loadHistory(); swReady().then(resyncPush).catch(function(){}); if (parseHash(location.hash).tour || (!cfg.onboarded && !cfg.setupDone)) startOnboarding(0); }
 
   // ---------- onboarding carousel: one step at a time, pictures, auto-advance when a step can be detected ----------
   var ob = { open: false, step: 0, timer: null, mac: false };
