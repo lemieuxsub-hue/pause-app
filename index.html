@@ -288,7 +288,7 @@
     if (!lastHb) { try { lastHb = Number(localStorage.getItem('pause.hb.' + cfg.inTopic)) || 0; } catch (e) {} }
     var age = lastHb ? (Date.now() / 1000 - lastHb) : null;
     if (age === null) { el.innerHTML = ''; return; }
-    if (age < 330) { el.innerHTML = ''; return; }
+    if (age < 2000) { el.innerHTML = ''; return; }
     var since = new Date(lastHb * 1000), today = since.toDateString() === new Date().toDateString();
     var when = since.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + (today ? '' : ' on ' + since.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }));
     el.innerHTML = '<div class="banner">Pause’s server hasn’t checked in since ' + esc(when) + '. It is probably asleep. Cards and answers resume when it is back; anything you send now waits for it.</div>';
